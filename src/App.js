@@ -9,17 +9,14 @@ const BPMonitorApp = () => {
   // Connection State
   const [connectionType, setConnectionType] = useState('none');
   const [isConnected, setIsConnected] = useState(false);
-  const [deviceInfo, setDeviceInfo] = useState(null);
-  const [deviceInfo, setDeviceInfo] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState('none');
   const [deviceInfo, setDeviceInfo] = useState(null);
 const [espIP, setEspIP] = useState('');
 const websocketRef = useRef(null);
 
-const [espIP, setEspIP] = useState('');
 const [rawIRValue, setRawIRValue] = useState(0);
 const [rawRedValue, setRawRedValue] = useState(0);
 const [ppgData, setPpgData] = useState([]);
-const websocketRef = useRef(null);
   
   // Sensor Data
   const [heartRate, setHeartRate] = useState(0);

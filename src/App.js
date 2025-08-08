@@ -10,6 +10,16 @@ const BPMonitorApp = () => {
   const [connectionType, setConnectionType] = useState('none');
   const [isConnected, setIsConnected] = useState(false);
   const [deviceInfo, setDeviceInfo] = useState(null);
+  const [deviceInfo, setDeviceInfo] = useState(null);
+  const [deviceInfo, setDeviceInfo] = useState(null);
+const [espIP, setEspIP] = useState('');
+const websocketRef = useRef(null);
+
+const [espIP, setEspIP] = useState('');
+const [rawIRValue, setRawIRValue] = useState(0);
+const [rawRedValue, setRawRedValue] = useState(0);
+const [ppgData, setPpgData] = useState([]);
+const websocketRef = useRef(null);
   
   // Sensor Data
   const [heartRate, setHeartRate] = useState(0);
@@ -322,23 +332,23 @@ const BPMonitorApp = () => {
     });
   };
 
-  // Demo data when not connected
-  useEffect(() => {
-    if (!isConnected) {
-      const interval = setInterval(() => {
-        const time = Date.now();
-        const simulatedHR = 65 + Math.sin(time / 10000) * 10 + Math.random() * 3;
-        setHeartRate(Math.round(simulatedHR));
-        setHeartRateAvg(Math.round(70 + Math.sin(time / 20000) * 8));
-        setOxygenSaturation(96 + Math.round(Math.random() * 4));
-        setSignalQuality(80 + Math.round(Math.random() * 20));
-        setHeartRateVariability(25 + Math.round(Math.random() * 20));
-      }, 200);
-      
-      return () => clearInterval(interval);
-    }
-  }, [isConnected]);
-
+ // NO FAKE DATA - Only real sensor data from ESP32
+useEffect(() => {
+  console.log('🚫 Demo mode disabled - waiting for REAL sensor data from ESP32');
+  
+  // Clear all fake data when not connected
+  if (!isConnected) {
+    setHeartRate(0);
+    setHeartRateAvg(0);
+    setOxygenSaturation(0);
+    setSignalQuality(0);
+    setHeartRateVariability(0);
+    setRawIRValue(0);
+    setRawRedValue(0);
+    setPpgData([]);
+  }
+}, [isConnected]);
+  
   useEffect(() => {
     const interval = setInterval(validateMeasurementConditions, 1000);
     return () => clearInterval(interval);
@@ -348,6 +358,73 @@ const BPMonitorApp = () => {
     updateStatistics();
   }, [bpHistory]);
 
+  // WiFi WebSocket Connection
+const connectWiFi = async () => {
+  if (!espIP) {
+    const ip = prompt('ใส่ IP Address ของ ESP32:', '192.168.1.100');
+    if (!ip) return;
+    setEspIP(ip);
+  }
+  
+  try {
+    setConnectionStatus('connecting');
+    const ws = new WebSocket(`ws://${espIP}:81`);
+    
+    ws.onopen = () => {
+      websocketRef.current = ws;
+      setConnectionType('wifi');
+      setIsConnected(true);
+      setConnectionStatus('connected');
+      setDeviceInfo({ type: 'WiFi', ip: espIP });
+      console.log('✅ Connected to ESP32');
+    };
+    
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        processRealSensorData(data);
+      } catch (e) {
+        console.warn('Invalid data:', event.data);
+      }
+    };
+    
+    ws.onerror = () => {
+      setConnectionStatus('error');
+      setIsConnected(false);
+    };
+    
+  } catch (error) {
+    console.error('Connection failed:', error);
+    setConnectionStatus('error');
+  }
+};
+
+// Process REAL sensor data from ESP32
+const processRealSensorData = (data) => {
+  console.log('📡 Real data from ESP32:', data);
+  
+  if (data.heartRate) {
+    setHeartRate(data.heartRate.current || 0);
+    setHeartRateAvg(data.heartRate.average || 0);
+  }
+  
+  if (data.ppg) {
+    setRawIRValue(data.ppg.ir || 0);
+    setRawRedValue(data.ppg.red || 0);
+    
+    const time = Date.now();
+    const newPoint = { 
+      time, 
+      value: (data.ppg.ir - 50000) / 50000,
+      raw: data.ppg.ir 
+    };
+    setPpgData(prev => [...prev, newPoint].slice(-100));
+  }
+  
+  if (data.spo2) setOxygenSaturation(Math.round(data.spo2));
+  if (data.hrv) setHeartRateVariability(Math.round(data.hrv));
+  if (data.features) setSignalQuality(data.features.signalStrength || 0);
+};
   // Helper Functions
   const getBPStatus = (systolic, diastolic) => {
     if (systolic >= 140 || diastolic >= 90) return { status: 'สูง', color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' };

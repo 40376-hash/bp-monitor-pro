@@ -6,17 +6,18 @@ const BPMonitorApp = () => {
   // Navigation State
   const [currentPage, setCurrentPage] = useState('home');
   
-  // Connection State
+  // Connection State - ✅ FIXED: ลบการประกาศซ้ำ
   const [connectionType, setConnectionType] = useState('none');
   const [isConnected, setIsConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('none');
+  const [connectionStatus, setConnectionStatus] = useState('none'); // connecting, connected, error, disconnected
   const [deviceInfo, setDeviceInfo] = useState(null);
-const [espIP, setEspIP] = useState('');
-const websocketRef = useRef(null);
-
-const [rawIRValue, setRawIRValue] = useState(0);
-const [rawRedValue, setRawRedValue] = useState(0);
-const [ppgData, setPpgData] = useState([]);
+  
+  // ESP32 Connection - ✅ FIXED: ลบการประกาศซ้ำ
+  const [espIP, setEspIP] = useState('');
+  const [rawIRValue, setRawIRValue] = useState(0);
+  const [rawRedValue, setRawRedValue] = useState(0);
+  const [ppgData, setPpgData] = useState([]);
+  const websocketRef = useRef(null);
   
   // Sensor Data
   const [heartRate, setHeartRate] = useState(0);
@@ -48,6 +49,259 @@ const [ppgData, setPpgData] = useState([]);
     weekly: { avg: { systolic: 0, diastolic: 0 }, count: 0 },
     monthly: { avg: { systolic: 0, diastolic: 0 }, count: 0 }
   });
+
+  // 🔧 DISCONNECT FIRST - ตัดการเชื่อมต่อเดิมก่อนเสมอ
+  const disconnectAll = () => {
+    console.log('🔌 Disconnecting all connections...');
+    
+    // Close WebSocket if exists
+    if (websocketRef.current) {
+      websocketRef.current.close();
+      websocketRef.current = null;
+    }
+    
+    // Clear all states
+    setIsConnected(false);
+    setConnectionType('none');
+    setConnectionStatus('disconnected');
+    setDeviceInfo(null);
+    
+    // Clear sensor data - NO MORE FAKE DATA!
+    setHeartRate(0);
+    setHeartRateAvg(0);
+    setOxygenSaturation(0);
+    setSignalQuality(0);
+    setHeartRateVariability(0);
+    setRawIRValue(0);
+    setRawRedValue(0);
+    setPpgData([]);
+    
+    console.log('✅ All connections disconnected');
+  };
+
+  // 📶 WiFi WebSocket Connection - REAL CONNECTION!
+  const connectWiFi = async () => {
+    console.log('📶 Attempting WiFi connection...');
+    
+    // ✅ STEP 1: Disconnect existing connections first
+    disconnectAll();
+    
+    let ip = espIP;
+    if (!ip) {
+      ip = prompt('ใส่ IP Address ของ ESP32:', '192.168.1.100');
+      if (!ip) return;
+      setEspIP(ip);
+    }
+    
+    try {
+      setConnectionStatus('connecting');
+      console.log(`🔄 Connecting to ws://${ip}:81`);
+      
+      const ws = new WebSocket(`ws://${ip}:81`);
+      
+      // Set timeout for connection
+      const timeout = setTimeout(() => {
+        ws.close();
+        setConnectionStatus('error');
+        alert('⚠️ การเชื่อมต่อ WiFi หมดเวลา - ตรวจสอบ IP และ WiFi');
+      }, 10000);
+      
+      ws.onopen = () => {
+        clearTimeout(timeout);
+        websocketRef.current = ws;
+        setConnectionType('wifi');
+        setIsConnected(true);
+        setConnectionStatus('connected');
+        setDeviceInfo({ type: 'WiFi WebSocket', ip: ip, port: 81 });
+        console.log('✅ WiFi WebSocket connected successfully');
+        alert('✅ เชื่อมต่อ WiFi สำเร็จ!');
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          processRealSensorData(data);
+        } catch (e) {
+          console.warn('⚠️ Invalid JSON data:', event.data);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        clearTimeout(timeout);
+        console.error('❌ WebSocket error:', error);
+        setConnectionStatus('error');
+        alert('❌ ไม่สามารถเชื่อมต่อ WiFi ได้ - ตรวจสอบ ESP32');
+      };
+      
+      ws.onclose = () => {
+        clearTimeout(timeout);
+        if (connectionStatus === 'connected') {
+          console.log('🔌 WebSocket connection closed');
+          disconnectAll();
+        }
+      };
+      
+    } catch (error) {
+      console.error('❌ WiFi connection failed:', error);
+      setConnectionStatus('error');
+      alert('❌ เชื่อมต่อ WiFi ไม่สำเร็จ: ' + error.message);
+    }
+  };
+
+  // 🔌 USB Serial Connection - REAL CONNECTION!
+  const connectSerial = async () => {
+    console.log('🔌 Attempting USB Serial connection...');
+    
+    // ✅ STEP 1: Disconnect existing connections first
+    disconnectAll();
+    
+    try {
+      if (!navigator.serial) {
+        alert('❌ บราวเซอร์นี้ไม่รองรับ Web Serial API\nใช้ Chrome/Edge เวอร์ชันล่าสุด');
+        return;
+      }
+      
+      setConnectionStatus('connecting');
+      
+      // Request port access
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      
+      setConnectionType('serial');
+      setIsConnected(true);
+      setConnectionStatus('connected');
+      setDeviceInfo({ type: 'USB Serial', port: 'COM Port', baudRate: 115200 });
+      console.log('✅ USB Serial connected successfully');
+      alert('✅ เชื่อมต่อ USB Serial สำเร็จ!');
+      
+      // Set up data reading
+      const reader = port.readable.getReader();
+      const readLoop = async () => {
+        try {
+          while (port.readable) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            
+            // Process serial data
+            const text = new TextDecoder().decode(value);
+            try {
+              const data = JSON.parse(text);
+              processRealSensorData(data);
+            } catch (e) {
+              // Not JSON, maybe raw sensor values
+              console.log('Serial data:', text);
+            }
+          }
+        } catch (error) {
+          console.error('Serial read error:', error);
+        } finally {
+          reader.releaseLock();
+        }
+      };
+      
+      readLoop();
+      
+    } catch (error) {
+      console.error('❌ Serial connection failed:', error);
+      setConnectionStatus('error');
+      alert('❌ เชื่อมต่อ USB Serial ไม่สำเร็จ: ' + error.message);
+    }
+  };
+
+  // 🔵 Bluetooth Connection - REAL CONNECTION!
+  const connectBluetooth = async () => {
+    console.log('🔵 Attempting Bluetooth connection...');
+    
+    // ✅ STEP 1: Disconnect existing connections first
+    disconnectAll();
+    
+    try {
+      if (!navigator.bluetooth) {
+        alert('❌ บราวเซอร์นี้ไม่รองรับ Web Bluetooth API\nใช้ Chrome/Edge เวอร์ชันล่าสุด');
+        return;
+      }
+      
+      setConnectionStatus('connecting');
+      
+      // Request Bluetooth device
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [
+          { namePrefix: 'ESP32' },
+          { namePrefix: 'BP-Monitor' }
+        ],
+        optionalServices: ['12345678-1234-1234-1234-123456789abc'] // ESP32 service UUID
+      });
+      
+      console.log('🔄 Connecting to Bluetooth device:', device.name);
+      
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService('12345678-1234-1234-1234-123456789abc');
+      const characteristic = await service.getCharacteristic('87654321-4321-4321-4321-cba987654321');
+      
+      // Set up notifications
+      await characteristic.startNotifications();
+      characteristic.addEventListener('characteristicvaluechanged', (event) => {
+        const data = new TextDecoder().decode(event.target.value);
+        try {
+          const sensorData = JSON.parse(data);
+          processRealSensorData(sensorData);
+        } catch (e) {
+          console.log('Bluetooth data:', data);
+        }
+      });
+      
+      setConnectionType('bluetooth');
+      setIsConnected(true);
+      setConnectionStatus('connected');
+      setDeviceInfo({ type: 'Bluetooth LE', name: device.name || 'ESP32-BP' });
+      console.log('✅ Bluetooth connected successfully');
+      alert('✅ เชื่อมต่อ Bluetooth สำเร็จ!');
+      
+    } catch (error) {
+      console.error('❌ Bluetooth connection failed:', error);
+      setConnectionStatus('error');
+      alert('❌ เชื่อมต่อ Bluetooth ไม่สำเร็จ: ' + error.message);
+    }
+  };
+
+  // 📡 Process REAL sensor data from ESP32
+  const processRealSensorData = (data) => {
+    console.log('📡 Real sensor data received:', data);
+    
+    // Heart rate data
+    if (data.heartRate !== undefined) {
+      setHeartRate(Math.round(data.heartRate));
+    }
+    if (data.heartRateAvg !== undefined) {
+      setHeartRateAvg(Math.round(data.heartRateAvg));
+    }
+    
+    // PPG raw data
+    if (data.ppg) {
+      if (data.ppg.ir !== undefined) setRawIRValue(data.ppg.ir);
+      if (data.ppg.red !== undefined) setRawRedValue(data.ppg.red);
+      
+      // Add to PPG waveform data
+      const time = Date.now();
+      const newPoint = { 
+        time, 
+        value: (data.ppg.ir - 50000) / 50000,  // Normalize
+        raw: data.ppg.ir 
+      };
+      setPpgData(prev => [...prev, newPoint].slice(-200)); // Keep last 200 points
+    }
+    
+    // Other vital signs
+    if (data.spo2 !== undefined) {
+      setOxygenSaturation(Math.round(Math.max(0, Math.min(100, data.spo2))));
+    }
+    if (data.hrv !== undefined) {
+      setHeartRateVariability(Math.round(Math.max(0, data.hrv)));
+    }
+    if (data.signalQuality !== undefined) {
+      setSignalQuality(Math.round(Math.max(0, Math.min(100, data.signalQuality))));
+    }
+  };
 
   // Circular Progress Component
   const CircularProgress = ({ value, maxValue, color, size = 120, strokeWidth = 8, label, unit }) => {
@@ -195,73 +449,59 @@ const [ppgData, setPpgData] = useState([]);
     );
   };
 
-  // Model Upload Handler
-  const handleModelUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    setIsModelLoading(true);
-    try {
-      if (file.name.endsWith('.json')) {
-        const modelData = JSON.parse(await file.text());
-        setLoadedModel({
-          predict: (features) => {
-            const baseFeatures = Array.isArray(features) ? features : [features];
-            const systolic = 95 + baseFeatures[0] * 45 + (baseFeatures[1] || 0) * 20;
-            const diastolic = 65 + baseFeatures[0] * 25 + (baseFeatures[1] || 0) * 10;
-            return [Math.round(systolic), Math.round(diastolic)];
-          },
-          modelData
-        });
-        
-        setModelInfo({
-          name: file.name,
-          uploadTime: new Date().toLocaleString(),
-          type: 'Custom ML Model',
-          accuracy: modelData.accuracy || 'Unknown',
-          features: modelData.input_features || ['HR', 'HRV', 'SpO2', 'Signal Quality']
-        });
-      }
-    } catch (error) {
-      alert('ไม่สามารถโหลดโมเดลได้: ' + error.message);
-    }
-    setIsModelLoading(false);
+  // Helper Functions
+  const getBPStatus = (systolic, diastolic) => {
+    if (systolic >= 140 || diastolic >= 90) return { status: 'สูง', color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' };
+    if (systolic >= 130 || diastolic >= 80) return { status: 'เพิ่มขึ้น', color: 'text-yellow-500', bg: 'bg-yellow-50', border: 'border-yellow-200' };
+    if (systolic > 0) return { status: 'ปกติ', color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' };
+    return { status: 'ไม่มีข้อมูล', color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-200' };
   };
 
-  // Smart Measurement Validation
+  const getConnectionIcon = () => {
+    switch (connectionType) {
+      case 'serial': return <Usb className="h-5 w-5 text-blue-500" />;
+      case 'wifi': return <Wifi className="h-5 w-5 text-green-500" />;
+      case 'bluetooth': return <Bluetooth className="h-5 w-5 text-purple-500" />;
+      default: return <WifiOff className="h-5 w-5 text-gray-400" />;
+    }
+  };
+
+  const getConnectionStatusColor = () => {
+    switch (connectionStatus) {
+      case 'connecting': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+      case 'connected': return 'text-green-600 bg-green-50 border-green-200';
+      case 'error': return 'text-red-600 bg-red-50 border-red-200';
+      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+    }
+  };
+
+  const getConnectionStatusText = () => {
+    switch (connectionStatus) {
+      case 'connecting': return 'กำลังเชื่อมต่อ...';
+      case 'connected': return `เชื่อมต่อแล้ว (${connectionType.toUpperCase()})`;
+      case 'error': return 'เชื่อมต่อไม่สำเร็จ';
+      case 'disconnected': return 'ตัดการเชื่อมต่อแล้ว';
+      default: return 'ไม่ได้เชื่อมต่อ';
+    }
+  };
+
+  // Measurement functions
   const validateMeasurementConditions = () => {
     const reasons = [];
     
-    if (heartRateVariability > 50) {
-      reasons.push('Heart rate ไม่เสถียร (HRV สูง)');
-    }
-    
-    if (signalQuality < 70) {
-      reasons.push('คุณภาพสัญญาณต่ำ');
-    }
-    
-    if (heartRate < 50 || heartRate > 120) {
-      reasons.push('Heart rate อยู่นอกช่วงปกติ');
-    }
-    
-    if (!isConnected) {
-      reasons.push('ไม่ได้เชื่อมต่ออุปกรณ์');
-    }
+    if (heartRateVariability > 50) reasons.push('Heart rate ไม่เสถียร (HRV สูง)');
+    if (signalQuality < 70) reasons.push('คุณภาพสัญญาณต่ำ');
+    if (heartRate < 50 || heartRate > 120) reasons.push('Heart rate อยู่นอกช่วงปกติ');
+    if (!isConnected) reasons.push('ไม่ได้เชื่อมต่ออุปกรณ์');
     
     const isValid = reasons.length === 0 && isConnected;
     setIsValidForMeasurement(isValid);
-    setMeasurementBlocked({
-      blocked: !isValid,
-      reason: reasons.join(', ') || ''
-    });
-    
+    setMeasurementBlocked({ blocked: !isValid, reason: reasons.join(', ') || '' });
     return isValid;
   };
 
-  // Blood Pressure Measurement
   const measureBloodPressure = async () => {
     if (!validateMeasurementConditions()) return;
-    
     setIsMeasuring(true);
     setMeasurementTimer(15);
     
@@ -298,7 +538,6 @@ const [ppgData, setPpgData] = useState([]);
     updateStatistics();
   };
 
-  // Update Statistics
   const updateStatistics = () => {
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -329,22 +568,20 @@ const [ppgData, setPpgData] = useState([]);
     });
   };
 
- // NO FAKE DATA - Only real sensor data from ESP32
-useEffect(() => {
-  console.log('🚫 Demo mode disabled - waiting for REAL sensor data from ESP32');
-  
-  // Clear all fake data when not connected
-  if (!isConnected) {
-    setHeartRate(0);
-    setHeartRateAvg(0);
-    setOxygenSaturation(0);
-    setSignalQuality(0);
-    setHeartRateVariability(0);
-    setRawIRValue(0);
-    setRawRedValue(0);
-    setPpgData([]);
-  }
-}, [isConnected]);
+  // 🚫 NO FAKE DATA - Only real sensor data
+  useEffect(() => {
+    console.log('🚫 Demo mode disabled - waiting for REAL sensor data');
+    if (!isConnected) {
+      setHeartRate(0);
+      setHeartRateAvg(0);
+      setOxygenSaturation(0);
+      setSignalQuality(0);
+      setHeartRateVariability(0);
+      setRawIRValue(0);
+      setRawRedValue(0);
+      setPpgData([]);
+    }
+  }, [isConnected]);
   
   useEffect(() => {
     const interval = setInterval(validateMeasurementConditions, 1000);
@@ -354,90 +591,6 @@ useEffect(() => {
   useEffect(() => {
     updateStatistics();
   }, [bpHistory]);
-
-  // WiFi WebSocket Connection
-const connectWiFi = async () => {
-  if (!espIP) {
-    const ip = prompt('ใส่ IP Address ของ ESP32:', '192.168.1.100');
-    if (!ip) return;
-    setEspIP(ip);
-  }
-  
-  try {
-    setConnectionStatus('connecting');
-    const ws = new WebSocket(`ws://${espIP}:81`);
-    
-    ws.onopen = () => {
-      websocketRef.current = ws;
-      setConnectionType('wifi');
-      setIsConnected(true);
-      setConnectionStatus('connected');
-      setDeviceInfo({ type: 'WiFi', ip: espIP });
-      console.log('✅ Connected to ESP32');
-    };
-    
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        processRealSensorData(data);
-      } catch (e) {
-        console.warn('Invalid data:', event.data);
-      }
-    };
-    
-    ws.onerror = () => {
-      setConnectionStatus('error');
-      setIsConnected(false);
-    };
-    
-  } catch (error) {
-    console.error('Connection failed:', error);
-    setConnectionStatus('error');
-  }
-};
-
-// Process REAL sensor data from ESP32
-const processRealSensorData = (data) => {
-  console.log('📡 Real data from ESP32:', data);
-  
-  if (data.heartRate) {
-    setHeartRate(data.heartRate.current || 0);
-    setHeartRateAvg(data.heartRate.average || 0);
-  }
-  
-  if (data.ppg) {
-    setRawIRValue(data.ppg.ir || 0);
-    setRawRedValue(data.ppg.red || 0);
-    
-    const time = Date.now();
-    const newPoint = { 
-      time, 
-      value: (data.ppg.ir - 50000) / 50000,
-      raw: data.ppg.ir 
-    };
-    setPpgData(prev => [...prev, newPoint].slice(-100));
-  }
-  
-  if (data.spo2) setOxygenSaturation(Math.round(data.spo2));
-  if (data.hrv) setHeartRateVariability(Math.round(data.hrv));
-  if (data.features) setSignalQuality(data.features.signalStrength || 0);
-};
-  // Helper Functions
-  const getBPStatus = (systolic, diastolic) => {
-    if (systolic >= 140 || diastolic >= 90) return { status: 'สูง', color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' };
-    if (systolic >= 130 || diastolic >= 80) return { status: 'เพิ่มขึ้น', color: 'text-yellow-500', bg: 'bg-yellow-50', border: 'border-yellow-200' };
-    if (systolic > 0) return { status: 'ปกติ', color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' };
-    return { status: 'ไม่มีข้อมูล', color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-200' };
-  };
-
-  const getConnectionIcon = () => {
-    switch (connectionType) {
-      case 'serial': return <Usb className="h-5 w-5 text-blue-500" />;
-      case 'wifi': return <Wifi className="h-5 w-5 text-green-500" />;
-      case 'bluetooth': return <Bluetooth className="h-5 w-5 text-purple-500" />;
-      default: return <WifiOff className="h-5 w-5 text-gray-400" />;
-    }
-  };
 
   // Navigation Component
   const Navigation = () => (
@@ -449,7 +602,7 @@ const processRealSensorData = (data) => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-800">BP Monitor Pro</h1>
-            <p className="text-sm text-gray-600">AI Blood Pressure Monitoring</p>
+            <p className="text-sm text-gray-600">🔥 Real Hardware Connection - No Fake Data!</p>
           </div>
         </div>
         
@@ -507,27 +660,32 @@ const processRealSensorData = (data) => {
     
     return (
       <div className="space-y-6">
-        <div className={`rounded-2xl p-4 border-2 ${isConnected ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+        <div className={`rounded-2xl p-4 border-2 ${getConnectionStatusColor()}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               {getConnectionIcon()}
               <div>
-                <div className={`font-medium ${isConnected ? 'text-green-800' : 'text-red-800'}`}>
-                  {isConnected ? `เชื่อมต่อแล้ว (${connectionType.toUpperCase()})` : 'ไม่ได้เชื่อมต่อ'}
+                <div className="font-medium">
+                  {getConnectionStatusText()}
                 </div>
                 <div className="text-sm text-gray-600">
                   {deviceInfo?.ip && `IP: ${deviceInfo.ip}`}
                   {deviceInfo?.name && `Device: ${deviceInfo.name}`}
+                  {deviceInfo?.port && ` | Port: ${deviceInfo.port}`}
+                  {deviceInfo?.baudRate && ` | Baud: ${deviceInfo.baudRate}`}
                 </div>
               </div>
             </div>
-            {!isConnected && (
+            {!isConnected && connectionStatus !== 'connecting' && (
               <button
                 onClick={() => setCurrentPage('connect')}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
               >
                 เชื่อมต่อเลย
               </button>
+            )}
+            {connectionStatus === 'connecting' && (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             )}
           </div>
         </div>
@@ -627,6 +785,28 @@ const processRealSensorData = (data) => {
           </div>
         </div>
 
+        {/* Real-time PPG Waveform */}
+        {ppgData.length > 0 && (
+          <div className="bg-white rounded-2xl p-6 border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">📡 PPG Signal (Real-time)</h3>
+            <div className="h-32 bg-black rounded-lg p-4 relative">
+              <svg className="w-full h-full" viewBox="0 0 100 50">
+                <path
+                  d={ppgData.map((point, i) => 
+                    `${i === 0 ? 'M' : 'L'} ${(i / (ppgData.length - 1)) * 100} ${25 + point.value * 15}`
+                  ).join(' ')}
+                  stroke="#10b981"
+                  strokeWidth="0.5"
+                  fill="none"
+                />
+              </svg>
+              <div className="absolute top-2 left-2 text-green-400 text-xs">
+                IR: {rawIRValue} | RED: {rawRedValue}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Measurement Control */}
         <div className="bg-white rounded-3xl p-8 border-2 border-gray-200">
           <h2 className="text-xl font-bold text-gray-800 mb-6 text-center">การวัดความดันโลหิต</h2>
@@ -684,112 +864,6 @@ const processRealSensorData = (data) => {
             </div>
           )}
         </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl p-6 border border-blue-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-blue-800">วันนี้</h3>
-              <Calendar className="h-5 w-5 text-blue-600" />
-            </div>
-            <div className="text-2xl font-bold text-blue-800 mb-1">
-              {bpStats.daily.avg.systolic > 0 ? `${bpStats.daily.avg.systolic}/${bpStats.daily.avg.diastolic}` : '--/--'}
-            </div>
-            <div className="text-sm text-blue-600">{bpStats.daily.count} ครั้ง</div>
-            {bpStats.daily.count > 0 && (
-              <div className="mt-2">
-                <div className={`inline-block px-2 py-1 rounded text-xs font-medium ${getBPStatus(bpStats.daily.avg.systolic, bpStats.daily.avg.diastolic).color} bg-white`}>
-                  {getBPStatus(bpStats.daily.avg.systolic, bpStats.daily.avg.diastolic).status}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-2xl p-6 border border-green-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-green-800">สัปดาห์นี้</h3>
-              <TrendingUp className="h-5 w-5 text-green-600" />
-            </div>
-            <div className="text-2xl font-bold text-green-800 mb-1">
-              {bpStats.weekly.avg.systolic > 0 ? `${bpStats.weekly.avg.systolic}/${bpStats.weekly.avg.diastolic}` : '--/--'}
-            </div>
-            <div className="text-sm text-green-600">{bpStats.weekly.count} ครั้ง</div>
-            {bpStats.weekly.count > 0 && (
-              <div className="mt-2">
-                <div className={`inline-block px-2 py-1 rounded text-xs font-medium ${getBPStatus(bpStats.weekly.avg.systolic, bpStats.weekly.avg.diastolic).color} bg-white`}>
-                  {getBPStatus(bpStats.weekly.avg.systolic, bpStats.weekly.avg.diastolic).status}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl p-6 border border-purple-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-purple-800">เดือนนี้</h3>
-              <BarChart3 className="h-5 w-5 text-purple-600" />
-            </div>
-            <div className="text-2xl font-bold text-purple-800 mb-1">
-              {bpStats.monthly.avg.systolic > 0 ? `${bpStats.monthly.avg.systolic}/${bpStats.monthly.avg.diastolic}` : '--/--'}
-            </div>
-            <div className="text-sm text-purple-600">{bpStats.monthly.count} ครั้ง</div>
-            {bpStats.monthly.count > 0 && (
-              <div className="mt-2">
-                <div className={`inline-block px-2 py-1 rounded text-xs font-medium ${getBPStatus(bpStats.monthly.avg.systolic, bpStats.monthly.avg.diastolic).color} bg-white`}>
-                  {getBPStatus(bpStats.monthly.avg.systolic, bpStats.monthly.avg.diastolic).status}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Recent Measurements */}
-        {bpHistory.length > 0 && (
-          <div className="bg-white rounded-2xl p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">การวัดล่าสุด</h3>
-              <button
-                onClick={() => setCurrentPage('statistics')}
-                className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-              >
-                ดูทั้งหมด →
-              </button>
-            </div>
-            <div className="space-y-3">
-              {bpHistory.slice(0, 5).map((bp, index) => {
-                const status = getBPStatus(bp.systolic, bp.diastolic);
-                return (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center space-x-4">
-                      <div className="text-lg font-bold text-gray-800">
-                        {bp.systolic}/{bp.diastolic}
-                      </div>
-                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${status.color} bg-white border`}>
-                        {status.status}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        HR: {bp.heartRate} BPM
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-medium text-gray-800">
-                        {bp.timestamp.toLocaleDateString('th-TH', { 
-                          month: 'short', 
-                          day: 'numeric' 
-                        })}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {bp.timestamp.toLocaleTimeString('th-TH', { 
-                          hour: '2-digit', 
-                          minute: '2-digit' 
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -797,151 +871,126 @@ const processRealSensorData = (data) => {
   // Connection Page Component  
   const ConnectionPage = () => (
     <div className="space-y-6">
-      {/* Model Upload Section */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-800">อัปโหลดโมเดล AI</h2>
-            <p className="text-gray-600">อัปโหลดโมเดลที่เทรนจาก Google Colab</p>
-          </div>
-          <Brain className={`h-8 w-8 ${loadedModel ? 'text-green-500' : 'text-gray-400'}`} />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <input
-              type="file"
-              ref={modelFileRef}
-              onChange={handleModelUpload}
-              accept=".json,.onnx,.bin,.h5"
-              className="hidden"
-            />
-            <button
-              onClick={() => modelFileRef.current?.click()}
-              disabled={isModelLoading}
-              className="w-full flex items-center justify-center space-x-3 p-6 border-2 border-dashed border-purple-300 rounded-2xl hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50"
-            >
-              <Upload className="h-8 w-8 text-purple-600" />
-              <div className="text-center">
-                <div className="font-medium text-purple-800">
-                  {isModelLoading ? 'กำลังโหลด...' : 'เลือกไฟล์โมเดล'}
-                </div>
-                <div className="text-sm text-purple-600">
-                  รองรับ .json, .onnx, .h5, .bin
-                </div>
+      {/* Connection Status */}
+      <div className={`rounded-2xl p-4 border-2 ${getConnectionStatusColor()}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            {getConnectionIcon()}
+            <div>
+              <div className="font-medium">
+                {getConnectionStatusText()}
               </div>
-            </button>
-          </div>
-
-          {modelInfo && (
-            <div className="bg-green-50 p-4 rounded-xl border border-green-200">
-              <h4 className="font-medium text-green-800 mb-3">โมเดลที่โหลดแล้ว</h4>
-              <div className="space-y-2 text-sm">
-                <div><strong>ไฟล์:</strong> {modelInfo.name}</div>
-                <div><strong>อัปโหลด:</strong> {modelInfo.uploadTime}</div>
-                <div><strong>ประเภท:</strong> {modelInfo.type}</div>
-                {modelInfo.accuracy && <div><strong>ความแม่นยำ:</strong> {modelInfo.accuracy}</div>}
-                {modelInfo.features && (
-                  <div><strong>Features:</strong> {modelInfo.features.join(', ')}</div>
-                )}
+              <div className="text-sm text-gray-600">
+                {deviceInfo?.ip && `IP: ${deviceInfo.ip}`}
+                {deviceInfo?.name && `Device: ${deviceInfo.name}`}
+                {deviceInfo?.port && ` | Port: ${deviceInfo.port}`}
+                {deviceInfo?.baudRate && ` | Baud: ${deviceInfo.baudRate}`}
               </div>
             </div>
+          </div>
+          {connectionStatus === 'connecting' && (
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
           )}
-        </div>
-
-        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-          <h4 className="font-medium text-blue-800 mb-2">📋 วิธีการอัปโหลดโมเดล:</h4>
-          <ol className="list-decimal list-inside text-sm text-blue-700 space-y-1">
-            <li>เทรนโมเดลใน Google Colab</li>
-            <li>Export เป็น .json หรือ .onnx</li>
-            <li>อัปโหลดที่นี่</li>
-            <li>ระบบจะใช้โมเดลในการทำนายความดัน</li>
-          </ol>
         </div>
       </div>
 
-      {/* Connection Options */}
+      {/* 🔥 REAL Connection Buttons - แก้ไขแล้ว! */}
       <div className="bg-white rounded-2xl p-6 border border-gray-200">
-        <h2 className="text-xl font-semibold text-gray-800 mb-6">เชื่อมต่ออุปกรณ์</h2>
+        <h2 className="text-xl font-semibold text-gray-800 mb-6">🔥 เชื่อมต่ออุปกรณ์ (Real Connection)</h2>
         
         {isConnected ? (
           <div className="text-center py-8">
-            <div className="mb-4">
+            <div className="mb-4 text-6xl">
               {getConnectionIcon()}
             </div>
-            <h3 className="text-lg font-semibold text-green-800 mb-2">เชื่อมต่อสำเร็จ!</h3>
+            <h3 className="text-lg font-semibold text-green-800 mb-2">✅ เชื่อมต่อสำเร็จ!</h3>
             <p className="text-gray-600 mb-4">
               {connectionType.toUpperCase()} - {deviceInfo?.name || deviceInfo?.ip || 'Connected'}
             </p>
             <button
-              onClick={() => {
-                setIsConnected(false);
-                setConnectionType('none');
-                setDeviceInfo(null);
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg"
+              onClick={disconnectAll}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-lg font-medium"
             >
-              ตัดการเชื่อมต่อ
+              🔌 ตัดการเชื่อมต่อ
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 🔌 USB Serial Button - REAL CONNECTION */}
             <button
-              onClick={() => {
-                setConnectionType('serial');
-                setIsConnected(true);
-                setDeviceInfo({ type: 'USB Serial', port: 'COM3' });
-              }}
-              className="flex flex-col items-center space-y-3 p-6 border-2 border-blue-200 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-colors"
+              onClick={connectSerial}
+              disabled={connectionStatus === 'connecting'}
+              className="flex flex-col items-center space-y-3 p-6 border-2 border-blue-200 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Usb className="h-12 w-12 text-blue-600" />
               <div className="text-center">
                 <div className="font-semibold text-blue-800">USB Serial</div>
                 <div className="text-sm text-blue-600">เสียบสาย USB</div>
                 <div className="text-xs text-gray-500 mt-1">เสถียรที่สุด</div>
+                <div className="text-xs text-green-600 font-medium mt-1 bg-green-100 px-2 py-1 rounded">
+                  ✅ Real Connection
+                </div>
               </div>
             </button>
 
+            {/* 📶 WiFi Button - REAL CONNECTION */}
             <button
-              onClick={() => {
-                setConnectionType('wifi');
-                setIsConnected(true);
-                setDeviceInfo({ type: 'WiFi WebSocket', ip: '192.168.1.100', port: 81 });
-              }}
-              className="flex flex-col items-center space-y-3 p-6 border-2 border-green-200 rounded-2xl hover:border-green-400 hover:bg-green-50 transition-colors"
+              onClick={connectWiFi}
+              disabled={connectionStatus === 'connecting'}
+              className="flex flex-col items-center space-y-3 p-6 border-2 border-green-200 rounded-2xl hover:border-green-400 hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Wifi className="h-12 w-12 text-green-600" />
               <div className="text-center">
                 <div className="font-semibold text-green-800">WiFi WebSocket</div>
                 <div className="text-sm text-green-600">ไร้สาย, เร็ว</div>
                 <div className="text-xs text-gray-500 mt-1">แนะนำสำหรับการใช้งาน</div>
+                <div className="text-xs text-green-600 font-medium mt-1 bg-green-100 px-2 py-1 rounded">
+                  ✅ Real Connection
+                </div>
               </div>
             </button>
 
+            {/* 🔵 Bluetooth Button - REAL CONNECTION */}
             <button
-              onClick={() => {
-                setConnectionType('bluetooth');
-                setIsConnected(true);
-                setDeviceInfo({ type: 'Bluetooth LE', name: 'ESP32-MAX30102' });
-              }}
-              className="flex flex-col items-center space-y-3 p-6 border-2 border-purple-200 rounded-2xl hover:border-purple-400 hover:bg-purple-50 transition-colors"
+              onClick={connectBluetooth}
+              disabled={connectionStatus === 'connecting'}
+              className="flex flex-col items-center space-y-3 p-6 border-2 border-purple-200 rounded-2xl hover:border-purple-400 hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Bluetooth className="h-12 w-12 text-purple-600" />
               <div className="text-center">
                 <div className="font-semibold text-purple-800">Bluetooth LE</div>
                 <div className="text-sm text-purple-600">ประหยัดไฟ</div>
                 <div className="text-xs text-gray-500 mt-1">เหมาะสำหรับมือถือ</div>
+                <div className="text-xs text-green-600 font-medium mt-1 bg-green-100 px-2 py-1 rounded">
+                  ✅ Real Connection
+                </div>
               </div>
             </button>
           </div>
         )}
+
+        {/* Connection Help */}
+        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+          <h4 className="font-medium text-blue-800 mb-2">💡 คำแนะนำการเชื่อมต่อ:</h4>
+          <ul className="text-sm text-blue-700 space-y-1">
+            <li><strong>📶 WiFi:</strong> ตรวจสอบ IP Address ของ ESP32 และให้อยู่ใน Network เดียวกัน</li>
+            <li><strong>🔌 USB Serial:</strong> เสียบสาย USB และเลือก Port ที่ถูกต้อง (Chrome/Edge เท่านั้น)</li>
+            <li><strong>🔵 Bluetooth:</strong> เปิด Bluetooth และให้ ESP32 อยู่ใน Pairing Mode</li>
+          </ul>
+          
+          <div className="mt-3 p-3 bg-yellow-100 rounded border-l-4 border-yellow-500">
+            <p className="text-sm text-yellow-800">
+              <strong>⚠️ สำคัญ:</strong> ระบบจะตัดการเชื่อมต่อเดิมก่อนเชื่อมต่อใหม่เสมอ - สามารถเชื่อมต่อได้ทีละอันเท่านั้น!
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
 
   // Statistics Page Component
   const StatisticsPage = () => {
-    const chartData = bpHistory.slice(0, 20).reverse().map((bp, index) => ({
+    const chartData = bpHistory.slice(0, 20).reverse().map((bp) => ({
       name: bp.timestamp.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }),
       systolic: bp.systolic,
       diastolic: bp.diastolic,
@@ -990,132 +1039,75 @@ const processRealSensorData = (data) => {
         </div>
 
         {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {chartData.length > 0 ? (
           <div className="bg-white rounded-2xl p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">แนวโน้มความดันโลหิต</h3>
-            {chartData.length > 0 ? (
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
-                    <XAxis dataKey="name" />
-                    <YAxis domain={[60, 180]} />
-                    <Tooltip 
-                      formatter={(value, name) => [value, name === 'systolic' ? 'Systolic' : 'Diastolic']}
-                      labelFormatter={(label) => `วันที่: ${label}`}
-                    />
-                    <Line type="monotone" dataKey="systolic" stroke="#ef4444" strokeWidth={3} dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }} />
-                    <Line type="monotone" dataKey="diastolic" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-gray-500">
-                <div className="text-center">
-                  <TrendingUp className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-                  <div>ยังไม่มีข้อมูลสถิติ</div>
-                </div>
-              </div>
-            )}
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 แนวโน้มความดันโลหิต</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <XAxis dataKey="name" />
+                  <YAxis domain={[60, 180]} />
+                  <Tooltip 
+                    formatter={(value, name) => [value, name === 'systolic' ? 'Systolic' : 'Diastolic']}
+                    labelFormatter={(label) => `วันที่: ${label}`}
+                  />
+                  <Line type="monotone" dataKey="systolic" stroke="#ef4444" strokeWidth={3} dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }} />
+                  <Line type="monotone" dataKey="diastolic" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-
+        ) : (
           <div className="bg-white rounded-2xl p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">ค่าเฉลี่ยตามช่วงเวลา</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-                <div>
-                  <div className="font-medium text-blue-800">วันนี้</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {bpStats.daily.avg.systolic > 0 ? `${bpStats.daily.avg.systolic}/${bpStats.daily.avg.diastolic}` : '--/--'}
-                  </div>
-                </div>
-                <div className="text-sm text-blue-600">{bpStats.daily.count} ครั้ง</div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                <div>
-                  <div className="font-medium text-green-800">สัปดาห์นี้</div>
-                  <div className="text-2xl font-bold text-green-600">
-                    {bpStats.weekly.avg.systolic > 0 ? `${bpStats.weekly.avg.systolic}/${bpStats.weekly.avg.diastolic}` : '--/--'}
-                  </div>
-                </div>
-                <div className="text-sm text-green-600">{bpStats.weekly.count} ครั้ง</div>
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
-                <div>
-                  <div className="font-medium text-purple-800">เดือนนี้</div>
-                  <div className="text-2xl font-bold text-purple-600">
-                    {bpStats.monthly.avg.systolic > 0 ? `${bpStats.monthly.avg.systolic}/${bpStats.monthly.avg.diastolic}` : '--/--'}
-                  </div>
-                </div>
-                <div className="text-sm text-purple-600">{bpStats.monthly.count} ครั้ง</div>
+            <div className="h-64 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <TrendingUp className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                <div>📊 ยังไม่มีข้อมูลสถิติ</div>
+                <div className="text-sm mt-1">เชื่อมต่ออุปกรณ์และวัดความดันเพื่อดูกราฟ</div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Detailed History */}
+        {/* Recent Measurements */}
         {bpHistory.length > 0 && (
           <div className="bg-white rounded-2xl p-6 border border-gray-200">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-800">ประวัติการวัดทั้งหมด</h3>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                <Download className="h-4 w-4" />
-                <span>ดาวน์โหลด CSV</span>
-              </button>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">📋 การวัดล่าสุด</h3>
             </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">วันที่</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">เวลา</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">ความดัน</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">สถานะ</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Heart Rate</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">ความมั่นใจ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bpHistory.map((bp, index) => {
-                    const status = getBPStatus(bp.systolic, bp.diastolic);
-                    return (
-                      <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-3 px-4">
-                          {bp.timestamp.toLocaleDateString('th-TH')}
-                        </td>
-                        <td className="py-3 px-4">
-                          {bp.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="font-bold">{bp.systolic}/{bp.diastolic}</span>
-                          <span className="text-gray-500 text-sm ml-1">mmHg</span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${status.color} bg-white border`}>
-                            {status.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">{bp.heartRate} BPM</td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center space-x-2">
-                            <div className="bg-gray-200 rounded-full h-2 w-16 overflow-hidden">
-                              <div 
-                                className="h-full bg-green-500"
-                                style={{ width: `${bp.confidence * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-sm text-gray-600">
-                              {(bp.confidence * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="space-y-3">
+              {bpHistory.slice(0, 10).map((bp, index) => {
+                const status = getBPStatus(bp.systolic, bp.diastolic);
+                return (
+                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                    <div className="flex items-center space-x-4">
+                      <div className="text-lg font-bold text-gray-800">
+                        {bp.systolic}/{bp.diastolic}
+                      </div>
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${status.color} bg-white border`}>
+                        {status.status}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        HR: {bp.heartRate} BPM
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-800">
+                        {bp.timestamp.toLocaleDateString('th-TH', { 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {bp.timestamp.toLocaleTimeString('th-TH', { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

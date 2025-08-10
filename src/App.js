@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Heart, Brain, Activity, CheckCircle, AlertCircle, BarChart3, Zap, Wifi, WifiOff, Upload, Download, Settings, Info, Bluetooth, Usb, Home, Link, TrendingUp, Calendar } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, Tooltip } from 'recharts';
+import WiFiManagerPage from './components/WiFiManagerPage';
 
 const BPMonitorApp = () => {
   // Navigation State

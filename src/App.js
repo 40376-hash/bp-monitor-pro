@@ -637,6 +637,15 @@ const BPMonitorApp = () => {
             <TrendingUp className="h-4 w-4" />
             <span>สถิติ</span>
           </button>
+            <button
+  onClick={() => setCurrentPage('wifi')}
+  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+    currentPage === 'wifi' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'
+  }`}
+>
+  <Settings className="h-4 w-4" />
+  <span>WiFi Settings</span>
+</button>
         </div>
       </div>
     </nav>

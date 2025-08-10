@@ -1134,6 +1134,7 @@ const BPMonitorApp = () => {
         {currentPage === 'home' && <HomePage />}
         {currentPage === 'connect' && <ConnectionPage />}
         {currentPage === 'statistics' && <StatisticsPage />}
+        {currentPage === 'wifi' && <WiFiManagerPage />}
       </div>
     </div>
   );

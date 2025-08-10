@@ -1134,7 +1134,7 @@ const BPMonitorApp = () => {
         {currentPage === 'home' && <HomePage />}
         {currentPage === 'connect' && <ConnectionPage />}
         {currentPage === 'statistics' && <StatisticsPage />}
-        {currentPage === 'wifi' && <WiFiManagerPage />}
+        {currentPage === 'wifi' && <WiFiManagerPage espIP={espIP} setEspIP={setEspIP} />}
       </div>
     </div>
   );

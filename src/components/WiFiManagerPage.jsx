@@ -104,8 +104,7 @@ const WiFiManagerPage = ({ espIP, setEspIP }) => {
 
   // Reset WiFi Settings
   const resetWiFi = async () => {
-    if (!confirm('ต้องการลบการตั้งค่า WiFi ทั้งหมดใช่หรือไม่?\n\nESP32 จะรีสตาร์ทและกลับไปเป็น Access Point Mode')) return;
-
+    if (!window.confirm('ต้องการลบการตั้งค่า WiFi ทั้งหมดใช่หรือไม่?\n\nESP32 จะรีสตาร์ทและกลับไปเป็น Access Point Mode')) return;
     if (!localEspIP) {
       setMessage('⚠️ กรุณาใส่ IP Address ของ ESP32 ก่อน');
       return;

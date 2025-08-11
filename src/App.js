@@ -690,32 +690,18 @@ const BPMonitorApp = () => {
     });
   };
 
-  // 🔥 Demo data when not connected (เพิ่มกลับมา)
+  // 🚫 NO FAKE DATA - Real medical app
   useEffect(() => {
+    console.log('🏥 Medical app - Real data only');
     if (!isConnected) {
-      // สร้างข้อมูลจำลองสำหรับดู UI
-      const interval = setInterval(() => {
-        const time = Date.now();
-        const simulatedHR = 65 + Math.sin(time / 10000) * 10 + Math.random() * 3;
-        setHeartRate(Math.round(simulatedHR));
-        setHeartRateAvg(Math.round(70 + Math.sin(time / 20000) * 8));
-        setOxygenSaturation(96 + Math.round(Math.random() * 4));
-        setSignalQuality(80 + Math.round(Math.random() * 20));
-        setHeartRateVariability(25 + Math.round(Math.random() * 20));
-        
-        // สร้าง PPG data จำลอง
-        const ppgValue = Math.sin(time / 1000) * 0.3 + Math.random() * 0.2;
-        setPpgData(prev => [...prev, {
-          time,
-          value: ppgValue,
-          raw: 50000 + ppgValue * 10000
-        }].slice(-200));
-      }, 200);
-      
-      return () => clearInterval(interval);
-    } else {
-      // ถ้าเชื่อมต่อแล้ว ให้ล้างข้อมูลจำลอง
-      console.log('🚫 Real connection established - clearing demo data');
+      setHeartRate(0);
+      setHeartRateAvg(0);
+      setOxygenSaturation(0);
+      setSignalQuality(0);
+      setHeartRateVariability(0);
+      setRawIRValue(0);
+      setRawRedValue(0);
+      setPpgData([]);
     }
   }, [isConnected]);
   
@@ -738,7 +724,7 @@ const BPMonitorApp = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-800">BP Monitor Pro</h1>
-            <p className="text-sm text-gray-600">🔥 Real Hardware Connection + Demo UI</p>
+            <p className="text-sm text-gray-600">🏥 Professional Blood Pressure Monitor</p>
           </div>
         </div>
         
@@ -930,37 +916,42 @@ const BPMonitorApp = () => {
           </div>
         </div>
 
-        {/* Real-time PPG Waveform - แสดงทั้งจำลองและจริง */}
-        {(ppgData.length > 0 || !isConnected) && (
+        {/* Real-time PPG Waveform - เฉพาะข้อมูลจริง */}
+        {ppgData.length > 0 && isConnected && (
           <div className="bg-white rounded-2xl p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              📡 PPG Signal {isConnected ? '(Real-time)' : '(Demo)'}
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">📡 PPG Signal (Real-time)</h3>
             <div className="h-32 bg-black rounded-lg p-4 relative">
               <svg className="w-full h-full" viewBox="0 0 100 50">
-                {ppgData.length > 0 ? (
-                  <path
-                    d={ppgData.map((point, i) => 
-                      `${i === 0 ? 'M' : 'L'} ${(i / (ppgData.length - 1)) * 100} ${25 + point.value * 15}`
-                    ).join(' ')}
-                    stroke={isConnected ? "#10b981" : "#6b7280"}
-                    strokeWidth="0.5"
-                    fill="none"
-                  />
-                ) : (
-                  <text x="50" y="25" textAnchor="middle" fill="#6b7280" fontSize="2">
-                    No Signal Data
-                  </text>
-                )}
+                <path
+                  d={ppgData.map((point, i) => 
+                    `${i === 0 ? 'M' : 'L'} ${(i / (ppgData.length - 1)) * 100} ${25 + point.value * 15}`
+                  ).join(' ')}
+                  stroke="#10b981"
+                  strokeWidth="0.5"
+                  fill="none"
+                />
               </svg>
               <div className="absolute top-2 left-2 text-green-400 text-xs">
-                {isConnected ? (
-                  `IR: ${rawIRValue} | RED: ${rawRedValue}`
-                ) : (
-                  'Demo Mode - เชื่อมต่อ ESP32 เพื่อดูข้อมูลจริง'
-                )}
+                IR: {rawIRValue} | RED: {rawRedValue}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Empty State - ไม่มีข้อมูล */}
+        {!isConnected && (
+          <div className="bg-white rounded-2xl p-8 border-2 border-gray-200 text-center">
+            <div className="text-gray-400 mb-4">
+              <Activity className="h-16 w-16 mx-auto mb-4" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">ไม่มีข้อมูลเซนเซอร์</h3>
+            <p className="text-gray-500 mb-4">เชื่อมต่อ ESP32 เพื่อเริ่มตรวจวัดสัญญาณชีพ</p>
+            <button
+              onClick={() => setCurrentPage('connect')}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              เชื่อมต่ออุปกรณ์
+            </button>
           </div>
         )}
 

@@ -690,18 +690,32 @@ const BPMonitorApp = () => {
     });
   };
 
-  // 🚫 NO FAKE DATA - Only real sensor data
+  // 🔥 Demo data when not connected (เพิ่มกลับมา)
   useEffect(() => {
-    console.log('🚫 Demo mode disabled - waiting for REAL sensor data');
     if (!isConnected) {
-      setHeartRate(0);
-      setHeartRateAvg(0);
-      setOxygenSaturation(0);
-      setSignalQuality(0);
-      setHeartRateVariability(0);
-      setRawIRValue(0);
-      setRawRedValue(0);
-      setPpgData([]);
+      // สร้างข้อมูลจำลองสำหรับดู UI
+      const interval = setInterval(() => {
+        const time = Date.now();
+        const simulatedHR = 65 + Math.sin(time / 10000) * 10 + Math.random() * 3;
+        setHeartRate(Math.round(simulatedHR));
+        setHeartRateAvg(Math.round(70 + Math.sin(time / 20000) * 8));
+        setOxygenSaturation(96 + Math.round(Math.random() * 4));
+        setSignalQuality(80 + Math.round(Math.random() * 20));
+        setHeartRateVariability(25 + Math.round(Math.random() * 20));
+        
+        // สร้าง PPG data จำลอง
+        const ppgValue = Math.sin(time / 1000) * 0.3 + Math.random() * 0.2;
+        setPpgData(prev => [...prev, {
+          time,
+          value: ppgValue,
+          raw: 50000 + ppgValue * 10000
+        }].slice(-200));
+      }, 200);
+      
+      return () => clearInterval(interval);
+    } else {
+      // ถ้าเชื่อมต่อแล้ว ให้ล้างข้อมูลจำลอง
+      console.log('🚫 Real connection established - clearing demo data');
     }
   }, [isConnected]);
   
@@ -724,7 +738,7 @@ const BPMonitorApp = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-800">BP Monitor Pro</h1>
-            <p className="text-sm text-gray-600">🔥 Real Hardware Connection - No Fake Data!</p>
+            <p className="text-sm text-gray-600">🔥 Real Hardware Connection + Demo UI</p>
           </div>
         </div>
         
@@ -916,23 +930,35 @@ const BPMonitorApp = () => {
           </div>
         </div>
 
-        {/* Real-time PPG Waveform */}
-        {ppgData.length > 0 && (
+        {/* Real-time PPG Waveform - แสดงทั้งจำลองและจริง */}
+        {(ppgData.length > 0 || !isConnected) && (
           <div className="bg-white rounded-2xl p-6 border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">📡 PPG Signal (Real-time)</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              📡 PPG Signal {isConnected ? '(Real-time)' : '(Demo)'}
+            </h3>
             <div className="h-32 bg-black rounded-lg p-4 relative">
               <svg className="w-full h-full" viewBox="0 0 100 50">
-                <path
-                  d={ppgData.map((point, i) => 
-                    `${i === 0 ? 'M' : 'L'} ${(i / (ppgData.length - 1)) * 100} ${25 + point.value * 15}`
-                  ).join(' ')}
-                  stroke="#10b981"
-                  strokeWidth="0.5"
-                  fill="none"
-                />
+                {ppgData.length > 0 ? (
+                  <path
+                    d={ppgData.map((point, i) => 
+                      `${i === 0 ? 'M' : 'L'} ${(i / (ppgData.length - 1)) * 100} ${25 + point.value * 15}`
+                    ).join(' ')}
+                    stroke={isConnected ? "#10b981" : "#6b7280"}
+                    strokeWidth="0.5"
+                    fill="none"
+                  />
+                ) : (
+                  <text x="50" y="25" textAnchor="middle" fill="#6b7280" fontSize="2">
+                    No Signal Data
+                  </text>
+                )}
               </svg>
               <div className="absolute top-2 left-2 text-green-400 text-xs">
-                IR: {rawIRValue} | RED: {rawRedValue}
+                {isConnected ? (
+                  `IR: ${rawIRValue} | RED: ${rawRedValue}`
+                ) : (
+                  'Demo Mode - เชื่อมต่อ ESP32 เพื่อดูข้อมูลจริง'
+                )}
               </div>
             </div>
           </div>

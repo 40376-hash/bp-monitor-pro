@@ -149,7 +149,7 @@ const BPMonitorApp = () => {
     }
   };
 
-  // 🔌 USB Serial Connection - REAL CONNECTION!
+  // 🔌 USB Serial Connection - REAL CONNECTION! (แก้ไขแล้ว)
   const connectSerial = async () => {
     console.log('🔌 Attempting USB Serial connection...');
     
@@ -157,55 +157,176 @@ const BPMonitorApp = () => {
     disconnectAll();
     
     try {
+      // ✅ ตรวจสอบการรองรับ Web Serial API
       if (!navigator.serial) {
-        alert('❌ บราวเซอร์นี้ไม่รองรับ Web Serial API\nใช้ Chrome/Edge เวอร์ชันล่าสุด');
+        alert('❌ บราวเซอร์นี้ไม่รองรับ Web Serial API\n\n' +
+              '✅ วิธีแก้:\n' +
+              '1. ใช้ Chrome เวอร์ชัน 89+ หรือ Edge เวอร์ชัน 89+\n' +
+              '2. เปิด chrome://flags/#enable-experimental-web-platform-features\n' +
+              '3. ตั้งค่าเป็น "Enabled"\n' +
+              '4. รีสตาร์ทบราวเซอร์');
         return;
       }
       
       setConnectionStatus('connecting');
+      console.log('🔄 Requesting serial port access...');
       
-      // Request port access
-      const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 115200 });
+      // ✅ ขอสิทธิ์เข้าถึง Serial Port
+      const port = await navigator.serial.requestPort({
+        filters: [
+          { usbVendorId: 0x1a86 }, // CH340
+          { usbVendorId: 0x0403 }, // FTDI
+          { usbVendorId: 0x10c4 }, // CP210x
+          { usbVendorId: 0x067b }, // Prolific
+        ]
+      });
       
+      console.log('📋 Port info:', await port.getInfo());
+      
+      // ✅ เปิดการเชื่อมต่อพร้อม Error Handling
+      await port.open({ 
+        baudRate: 115200,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        flowControl: 'none'
+      });
+      
+      console.log('✅ Serial port opened successfully');
+      
+      // ✅ บันทึกข้อมูลการเชื่อมต่อ
+      const portInfo = await port.getInfo();
       setConnectionType('serial');
       setIsConnected(true);
       setConnectionStatus('connected');
-      setDeviceInfo({ type: 'USB Serial', port: 'COM Port', baudRate: 115200 });
-      console.log('✅ USB Serial connected successfully');
-      alert('✅ เชื่อมต่อ USB Serial สำเร็จ!');
+      setDeviceInfo({ 
+        type: 'USB Serial', 
+        port: `VID:${portInfo.usbVendorId?.toString(16)} PID:${portInfo.usbProductId?.toString(16)}`,
+        baudRate: 115200 
+      });
       
-      // Set up data reading
+      console.log('✅ USB Serial connected successfully');
+      alert('✅ เชื่อมต่อ USB Serial สำเร็จ!\n📡 กำลังรอข้อมูลจาก ESP32...');
+      
+      // ✅ ตั้งค่าการอ่านข้อมูลแบบ Buffer
+      let buffer = '';
       const reader = port.readable.getReader();
+      
       const readLoop = async () => {
         try {
-          while (port.readable) {
+          while (port.readable && !reader.closed) {
             const { value, done } = await reader.read();
             if (done) break;
             
-            // Process serial data
+            // ✅ แปลงข้อมูลเป็น Text และรวมใน Buffer
             const text = new TextDecoder().decode(value);
-            try {
-              const data = JSON.parse(text);
-              processRealSensorData(data);
-            } catch (e) {
-              // Not JSON, maybe raw sensor values
-              console.log('Serial data:', text);
+            buffer += text;
+            
+            // ✅ แยกข้อความที่สมบูรณ์ (คั่นด้วย \n)
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // เก็บส่วนที่ไม่สมบูรณ์ไว้
+            
+            for (const line of lines) {
+              const cleanLine = line.trim();
+              if (cleanLine.length === 0) continue;
+              
+              console.log('📡 Serial data:', cleanLine);
+              
+              try {
+                // ✅ พยายามแปลงเป็น JSON
+                const data = JSON.parse(cleanLine);
+                console.log('📊 Parsed data:', data);
+                processRealSensorData(data);
+              } catch (e) {
+                // ✅ ถ้าไม่ใช่ JSON ให้แสดงข้อมูลดิบ
+                console.log('📝 Raw serial data:', cleanLine);
+                
+                // ✅ ลองแปลงข้อมูลแบบง่าย เช่น "HR:75,SpO2:98"
+                if (cleanLine.includes(':')) {
+                  const pairs = cleanLine.split(',');
+                  const simpleData = {};
+                  
+                  pairs.forEach(pair => {
+                    const [key, value] = pair.split(':');
+                    if (key && value) {
+                      const cleanKey = key.trim().toLowerCase();
+                      const numValue = parseFloat(value.trim());
+                      
+                      if (!isNaN(numValue)) {
+                        if (cleanKey.includes('hr') || cleanKey.includes('heart')) {
+                          simpleData.heartRate = numValue;
+                        } else if (cleanKey.includes('spo2') || cleanKey.includes('oxygen')) {
+                          simpleData.spo2 = numValue;
+                        } else if (cleanKey.includes('temp')) {
+                          simpleData.temperature = numValue;
+                        }
+                      }
+                    }
+                  });
+                  
+                  if (Object.keys(simpleData).length > 0) {
+                    console.log('📊 Converted simple data:', simpleData);
+                    processRealSensorData(simpleData);
+                  }
+                }
+              }
             }
           }
         } catch (error) {
-          console.error('Serial read error:', error);
+          console.error('❌ Serial read error:', error);
+          if (connectionStatus === 'connected') {
+            setConnectionStatus('error');
+            alert('❌ การอ่านข้อมูล Serial ขัดข้อง: ' + error.message);
+          }
         } finally {
-          reader.releaseLock();
+          try {
+            if (!reader.closed) {
+              await reader.releaseLock();
+            }
+          } catch (e) {
+            console.warn('⚠️ Error releasing reader:', e);
+          }
         }
       };
       
+      // ✅ เริ่มการอ่านข้อมูล
       readLoop();
+      
+      // ✅ ตั้งค่า Event Listener สำหรับการตัดการเชื่อมต่อ
+      port.addEventListener('disconnect', () => {
+        console.log('🔌 USB Serial disconnected');
+        disconnectAll();
+        alert('⚠️ USB Serial ถูกถอดออก');
+      });
       
     } catch (error) {
       console.error('❌ Serial connection failed:', error);
       setConnectionStatus('error');
-      alert('❌ เชื่อมต่อ USB Serial ไม่สำเร็จ: ' + error.message);
+      
+      let errorMessage = 'เชื่อมต่อ USB Serial ไม่สำเร็จ';
+      
+      if (error.name === 'NotFoundError') {
+        errorMessage = '❌ ไม่พบอุปกรณ์ USB Serial\n\n' +
+                      '✅ วิธีแก้:\n' +
+                      '1. ตรวจสอบว่าเสียบสาย USB แล้ว\n' +
+                      '2. ตรวจสอบว่า ESP32 เปิดอยู่\n' +
+                      '3. ลอง USB Port อื่น\n' +
+                      '4. ตรวจสอบ Driver (CH340/CP210x/FTDI)';
+      } else if (error.name === 'NetworkError') {
+        errorMessage = '❌ ไม่สามารถเปิด Serial Port ได้\n\n' +
+                      '✅ วิธีแก้:\n' +
+                      '1. ปิดโปรแกรมอื่นที่ใช้ Serial Port\n' +
+                      '2. ปิด Arduino IDE, PuTTY, หรือ Serial Monitor\n' +
+                      '3. ลองถอดสายแล้วเสียบใหม่';
+      } else if (error.name === 'InvalidStateError') {
+        errorMessage = '❌ Serial Port ถูกใช้งานอยู่\n\n' +
+                      '✅ วิธีแก้:\n' +
+                      '1. ปิด Arduino Serial Monitor\n' +
+                      '2. ปิดโปรแกรม Terminal อื่นๆ\n' +
+                      '3. รีเฟรชหน้าเว็บแล้วลองใหม่';
+      }
+      
+      alert(errorMessage + '\n\n🔧 รายละเอียด: ' + error.message);
     }
   };
 
@@ -637,15 +758,15 @@ const BPMonitorApp = () => {
             <TrendingUp className="h-4 w-4" />
             <span>สถิติ</span>
           </button>
-            <button
-  onClick={() => setCurrentPage('wifi')}
-  className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-    currentPage === 'wifi' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'
-  }`}
->
-  <Settings className="h-4 w-4" />
-  <span>WiFi Settings</span>
-</button>
+          <button
+            onClick={() => setCurrentPage('wifi')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              currentPage === 'wifi' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Settings className="h-4 w-4" />
+            <span>WiFi Settings</span>
+          </button>
         </div>
       </div>
     </nav>
@@ -992,6 +1113,30 @@ const BPMonitorApp = () => {
             <p className="text-sm text-yellow-800">
               <strong>⚠️ สำคัญ:</strong> ระบบจะตัดการเชื่อมต่อเดิมก่อนเชื่อมต่อใหม่เสมอ - สามารถเชื่อมต่อได้ทีละอันเท่านั้น!
             </p>
+          </div>
+          
+          <div className="mt-3 p-3 bg-red-100 rounded border-l-4 border-red-500">
+            <h5 className="font-medium text-red-800 mb-1">🔧 แก้ปัญหา USB Serial:</h5>
+            <div className="text-sm text-red-700 space-y-1">
+              <div><strong>ไม่รองรับ Web Serial API:</strong></div>
+              <ul className="ml-4 space-y-1">
+                <li>• ใช้ Chrome 89+ หรือ Edge 89+</li>
+                <li>• เปิด chrome://flags/#enable-experimental-web-platform-features</li>
+                <li>• ตั้งค่าเป็น "Enabled" แล้วรีสตาร์ทบราวเซอร์</li>
+              </ul>
+              <div className="mt-2"><strong>ไม่พบอุปกรณ์:</strong></div>
+              <ul className="ml-4 space-y-1">
+                <li>• ตรวจสอบสาย USB และ ESP32 เปิดอยู่</li>
+                <li>• ติดตั้ง Driver: CH340, CP210x หรือ FTDI</li>
+                <li>• ลอง USB Port อื่น</li>
+              </ul>
+              <div className="mt-2"><strong>Port ถูกใช้งาน:</strong></div>
+              <ul className="ml-4 space-y-1">
+                <li>• ปิด Arduino Serial Monitor</li>
+                <li>• ปิด PuTTY, Tera Term, หรือโปรแกรม Terminal อื่น</li>
+                <li>• รีเฟรชหน้าเว็บแล้วลองใหม่</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

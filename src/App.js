@@ -1127,6 +1127,16 @@ const BPMonitorApp = () => {
             <Brain className="h-4 w-4" />
             <span>AI Analysis</span>
           </button>
+          
+          {/* <button
+            onClick={() => setCurrentPage('wifi')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              currentPage === 'wifi' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Settings className="h-4 w-4" />
+            <span>WiFi Settings</span>
+          </button> */}
         </div>
       </div>
     </nav>
@@ -1622,7 +1632,7 @@ const BPMonitorApp = () => {
                   className="ml-4 p-2 text-red-500 hover:bg-red-50 rounded-lg"
                   title="ลบโมเดล"
                 >
-                  <Trash2 className="h-5 w-5" />
+                  <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
@@ -1926,7 +1936,7 @@ const BPMonitorApp = () => {
         {currentPage === 'connect' && <ConnectionPage />}
         {currentPage === 'statistics' && <StatisticsPage />}
         {currentPage === 'ai' && <AIAnalysisPage />}
-        {currentPage === 'wifi' && <WiFiManagerPage espIP={espIP} setEspIP={setEspIP} />}
+        {/* {currentPage === 'wifi' && <WiFiManagerPage espIP={espIP} setEspIP={setEspIP} />} */}
       </div>
 
       {/* 🔥 Connection Animation Overlay */}

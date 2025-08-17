@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, memo } from 'react';
 import {
   Heart, Brain, Activity, CheckCircle, AlertCircle, BarChart3, Wifi, WifiOff,
   Upload, Settings, Bluetooth, Usb, Home, Link as LinkIcon, TrendingUp, Calendar, X
@@ -34,6 +34,11 @@ const BPMonitorApp = () => {
   const [rawRedValue, setRawRedValue] = useState(0);
   const [ppgData, setPpgData] = useState([]);
   const websocketRef = useRef(null);
+
+  // ---------- SERIAL / BT REFS ----------
+  const serialPortRef = useRef(null);        // FIX: เก็บพอร์ตไว้เพื่อ cleanup
+  const serialReaderRef = useRef(null);      // FIX: เก็บ reader ไว้เพื่อ cancel อย่างถูกต้อง
+  const btDeviceRef = useRef(null);          // FIX: เก็บอุปกรณ์ BT ไว้เพื่อ cleanup
 
   // ---------- SENSOR STATE ----------
   const [heartRate, setHeartRate] = useState(0);
@@ -140,25 +145,22 @@ const BPMonitorApp = () => {
   };
 
   // ---------- PREDICT (PLACEHOLDER) ----------
-  const predictWithTensorFlowJS = async (_modelData, ppgWindow, features) => {
-    // ตรงนี้ไว้เชื่อม TF.js จริงภายหลัง (tf.loadLayersModel + model.predict)
-    const baseSystemic = 120 + (features[0] - 0.5) * 40; // mean
-    const baseDiastolic = 80 + (features[1] - 0.3) * 20; // std
+  const predictWithTensorFlowJS = async (_modelData, _ppgWindow, features) => {
+    const baseSystolic = 120 + (features[0] - 0.5) * 40; // mean
+    const baseDiastolic = 80 + (features[1] - 0.3) * 20;  // std
     return {
-      systolic: Math.max(90, Math.min(180, Math.round(baseSystemic + Math.random() * 10 - 5))),
+      systolic: Math.max(90, Math.min(180, Math.round(baseSystolic + Math.random() * 10 - 5))),
       diastolic: Math.max(60, Math.min(120, Math.round(baseDiastolic + Math.random() * 8 - 4))),
       confidence: 0.85 + Math.random() * 0.1,
       model_type: 'TensorFlow.js'
     };
   };
 
-  const predictWithTensorFlowLite = async (_modelBuffer, ppgWindow, features) => {
-    // ฝั่งเว็บยังไม่มี TFLite Interpreter ที่รันไฟล์ .tflite โดยตรง (ต้องผ่าน WebAssembly เสริม)
-    // ตอนนี้จำลองค่าไว้ก่อนเหมือน TF.js
-    const baseSystemic = 115 + (features[4] - 0.4) * 35; // p2p
-    const baseDiastolic = 75 + (features[5] - 0.5) * 18; // rms
+  const predictWithTensorFlowLite = async (_modelBuffer, _ppgWindow, features) => {
+    const baseSystolic = 115 + (features[4] - 0.4) * 35; // p2p
+    const baseDiastolic = 75 + (features[5] - 0.5) * 18;  // rms
     return {
-      systolic: Math.max(90, Math.min(180, Math.round(baseSystemic + Math.random() * 8 - 4))),
+      systolic: Math.max(90, Math.min(180, Math.round(baseSystolic + Math.random() * 8 - 4))),
       diastolic: Math.max(60, Math.min(120, Math.round(baseDiastolic + Math.random() * 6 - 3))),
       confidence: 0.88 + Math.random() * 0.08,
       model_type: 'TensorFlow Lite'
@@ -205,10 +207,25 @@ const BPMonitorApp = () => {
   };
 
   // ---------- DISCONNECT ----------
-  const disconnectAll = () => {
+  const disconnectAll = async () => {
+    // FIX: ปิด WebSocket อย่างปลอดภัย
     if (websocketRef.current) {
-      websocketRef.current.close();
+      try { websocketRef.current.onopen = websocketRef.current.onmessage = websocketRef.current.onerror = websocketRef.current.onclose = null; } catch {}
+      try { websocketRef.current.close(); } catch {}
       websocketRef.current = null;
+    }
+    // FIX: ยกเลิก Serial reader และปิดพอร์ต
+    if (serialReaderRef.current) {
+      try { await serialReaderRef.current.cancel(); } catch {}
+      serialReaderRef.current = null;
+    }
+    if (serialPortRef.current) {
+      try { await serialPortRef.current.close(); } catch {}
+      serialPortRef.current = null;
+    }
+    // FIX: ตัดการเชื่อมต่อ Bluetooth ถ้ายังเชื่อมอยู่
+    if (btDeviceRef.current && btDeviceRef.current.gatt?.connected) {
+      try { await btDeviceRef.current.gatt.disconnect(); } catch {}
     }
     setIsConnected(false);
     setConnectionType('none');
@@ -221,7 +238,7 @@ const BPMonitorApp = () => {
 
   // ---------- WIFI ----------
   const connectWiFi = async () => {
-    disconnectAll();
+    await disconnectAll(); // FIX: await เพื่อให้ปิดของเก่าให้เรียบร้อยก่อน
     let ip = espIP || prompt('ใส่ IP Address ของ ESP32:', '192.168.1.100');
     if (!ip) return;
     setEspIP(ip);
@@ -268,7 +285,7 @@ const BPMonitorApp = () => {
 
   // ---------- SERIAL ----------
   const connectSerial = async () => {
-    disconnectAll();
+    await disconnectAll(); // FIX
     try {
       if (!navigator.serial) {
         alert('❌ บราวเซอร์ไม่รองรับ Web Serial (ใช้ Chrome/Edge ล่าสุด)');
@@ -280,6 +297,8 @@ const BPMonitorApp = () => {
       });
       await port.open({ baudRate: 115200, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none' });
       const portInfo = await port.getInfo();
+      serialPortRef.current = port; // FIX
+
       setConnectionType('serial'); setIsConnected(true); setConnectionStatus('connected');
       setDeviceInfo({ type: 'USB Serial', port: `VID:${portInfo.usbVendorId?.toString(16)} PID:${portInfo.usbProductId?.toString(16)}`, baudRate: 115200 });
       setAnimationType('serial'); setConnectionAnimation(true);
@@ -287,11 +306,15 @@ const BPMonitorApp = () => {
 
       let buffer = '';
       const reader = port.readable.getReader();
+      serialReaderRef.current = reader; // FIX: เก็บไว้เพื่อ cancel ได้
+
+      // FIX: ใช้ loop แบบมาตรฐาน ไม่อ้าง reader.closed (เป็น Promise)
       (async () => {
         try {
-          while (port.readable && !reader.closed) {
+          for (;;) {
             const { value, done } = await reader.read();
             if (done) break;
+            if (!value) continue;
             const text = new TextDecoder().decode(value);
             buffer += text;
             const lines = buffer.split('\n');
@@ -318,7 +341,12 @@ const BPMonitorApp = () => {
           }
         } catch (e) {
           if (connectionStatus === 'connected') { setConnectionStatus('error'); alert('❌ อ่าน Serial ขัดข้อง'); }
-        } finally { try { await reader.releaseLock(); } catch {} }
+        } finally {
+          try { reader.releaseLock(); } catch {}
+          if (port && port.readable) {
+            try { await port.close(); } catch {}
+          }
+        }
       })();
 
       port.addEventListener('disconnect', () => { disconnectAll(); alert('⚠️ USB ถูกถอดออก'); });
@@ -330,7 +358,7 @@ const BPMonitorApp = () => {
 
   // ---------- BLUETOOTH ----------
   const connectBluetooth = async () => {
-    disconnectAll();
+    await disconnectAll(); // FIX
     try {
       if (!navigator.bluetooth) { alert('❌ บราวเซอร์ไม่รองรับ Web Bluetooth'); return; }
       setConnectionStatus('connecting');
@@ -338,6 +366,7 @@ const BPMonitorApp = () => {
         filters: [{ namePrefix: 'ESP32' }, { namePrefix: 'BP-Monitor' }],
         optionalServices: ['12345678-1234-1234-1234-123456789abc']
       });
+      btDeviceRef.current = device; // FIX
       const server = await device.gatt.connect();
       const service = await server.getPrimaryService('12345678-1234-1234-1234-123456789abc');
       const characteristic = await service.getCharacteristic('87654321-4321-4321-4321-cba987654321');
@@ -346,6 +375,13 @@ const BPMonitorApp = () => {
         const data = new TextDecoder().decode(event.target.value);
         try { processRealSensorData(JSON.parse(data)); } catch {}
       });
+
+      // FIX: cleanup เมื่อ BT หลุด
+      device.addEventListener('gattserverdisconnected', () => {
+        disconnectAll();
+        alert('⚠️ Bluetooth ถูกตัดการเชื่อมต่อ');
+      });
+
       setConnectionType('bluetooth'); setIsConnected(true); setConnectionStatus('connected');
       setDeviceInfo({ type: 'Bluetooth LE', name: device.name || 'ESP32-BP' });
       setAnimationType('bluetooth'); setConnectionAnimation(true);
@@ -363,7 +399,8 @@ const BPMonitorApp = () => {
       if (data.ppg.ir !== undefined) setRawIRValue(data.ppg.ir);
       if (data.ppg.red !== undefined) setRawRedValue(data.ppg.red);
       const time = Date.now();
-      const newPoint = { time, value: (data.ppg.ir - 50000) / 50000, raw: data.ppg.ir };
+      const base = typeof data.ppg.ir === 'number' ? data.ppg.ir : 50000;
+      const newPoint = { time, value: (base - 50000) / 50000, raw: base };
       setPpgData(prev => [...prev, newPoint].slice(-200));
     }
     if (data.spo2 !== undefined) setOxygenSaturation(Math.max(0, Math.min(100, Math.round(data.spo2))));
@@ -452,6 +489,14 @@ const BPMonitorApp = () => {
 
   useEffect(() => { updateStatistics(); }, [bpHistory]);
 
+  // FIX: ปิดทุกการเชื่อมต่อเมื่อผู้ใช้ปิด/รีเฟรชหน้า
+  useEffect(() => {
+    const onBeforeUnload = () => { /* best-effort cleanup */ disconnectAll(); };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ---------- UI HELPERS ----------
   const getConnectionIcon = () => {
     switch (connectionType) {
@@ -531,7 +576,7 @@ const BPMonitorApp = () => {
   const CircularProgress = ({ value, maxValue, color, size = 120, strokeWidth = 8, label, unit }) => {
     const radius = (size - strokeWidth) / 2;
     const circumference = radius * 2 * Math.PI;
-    const progress = Math.min(value / maxValue, 1);
+    const progress = Math.min((Number.isFinite(value) ? value : 0) / maxValue, 1); // FIX: กัน NaN
     const strokeDashoffset = circumference - (progress * circumference);
     return (
       <div className="relative inline-flex items-center justify-center">
@@ -542,7 +587,7 @@ const BPMonitorApp = () => {
             className="transition-all duration-700 ease-out"/>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="text-2xl font-bold text-gray-800">{value}</div>
+          <div className="text-2xl font-bold text-gray-800">{Math.round(Number.isFinite(value) ? value : 0)}</div>
           <div className="text-xs text-gray-600">{unit}</div>
           <div className="text-xs font-medium text-gray-700 mt-1">{label}</div>
         </div>
@@ -1137,4 +1182,4 @@ const BPMonitorApp = () => {
   );
 };
 
-export default BPMonitorApp;
+export default memo(BPMonitorApp); // FIX: memo เพื่อลด re-render เล็กน้อย

@@ -1,12 +1,10 @@
 {
-  "lucide-react": "^0.456.0",
-  "recharts": "^2.10.3"
   "name": "bp-monitor-pro",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
     "@tensorflow/tfjs": "^4.20.0",
-    "@tensorflow/tfjs-tflite": "^0.0.1-alpha.13"
+    "@tensorflow/tfjs-tflite": "^0.0.1-alpha.13",
     "zustand": "^4.5.2",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
@@ -14,8 +12,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "recharts": "^2.8.0",
-    "lucide-react": "^0.263.1",
+    "recharts": "^2.10.3",
+    "lucide-react": "^0.456.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

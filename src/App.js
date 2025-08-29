@@ -5,7 +5,14 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 // import WiFiManagerPage from './components/WiFiManagerPage'; // ถ้ามีไฟล์นี้ค่อยเปิดบรรทัดนี้
-import { LineChart as ReLineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import {
+  LineChart as ReLineChart,
+  Line as ReLine,
+  XAxis,
+  YAxis,
+  ResponsiveContainer,
+  Tooltip as ReTooltip
+} from 'recharts';
 import * as tf from '@tensorflow/tfjs';
 const MODEL_URL = '/tfjs_model/model.json'; // path ไปที่ public/tfjs_model/model.json
 
@@ -1180,17 +1187,30 @@ useEffect(() => {
           <div className="bg-white rounded-2xl p-6 border border-gray-200">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 แนวโน้มความดันโลหิต</h3>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <XAxis dataKey="name" /><YAxis domain={[60, 180]} />
-                  <Tooltip formatter={(v, n) => [v, n === 'systolic' ? 'Systolic' : 'Diastolic']} labelFormatter={(l) => `วันที่: ${l}`} />
-                  <Line type="monotone" dataKey="systolic" stroke="#ef4444" strokeWidth={3} dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }} />
-                  <Line type="monotone" dataKey="diastolic" stroke="#3b82f6" strokeWidth={3} dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        ) : (
+              <ReResponsiveContainer width="100%" height="100%">
+  <ReLineChart data={chartData}>
+    <ReXAxis dataKey="name" />
+    <ReYAxis domain={[60, 180]} />
+    <ReTooltip
+      formatter={(v, n) => [v, n === 'systolic' ? 'Systolic' : 'Diastolic']}
+      labelFormatter={(l) => `วันที่: ${l}`}
+    />
+    <ReLine
+      type="monotone"
+      dataKey="systolic"
+      stroke="#ef4444"
+      strokeWidth={3}
+      dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
+    />
+    <ReLine
+      type="monotone"
+      dataKey="diastolic"
+      stroke="#3b82f6"
+      strokeWidth={3}
+      dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+    />
+  </ReLineChart>
+</ReResponsiveContainer>
           <div className="bg-white rounded-2xl p-6 border border-gray-200">
             <div className="h-64 flex items-center justify-center text-gray-500">
               <div className="text-center">

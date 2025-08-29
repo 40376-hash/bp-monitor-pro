@@ -5,7 +5,9 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 // import WiFiManagerPage from './components/WiFiManagerPage'; // ถ้ามีไฟล์นี้ค่อยเปิดบรรทัดนี้
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import * as tf from '@tensorflow/tfjs';
+const MODEL_URL = '/tfjs_model/model.json'; // path ไปที่ public/tfjs_model/model.json
 
 const BPMonitorApp = () => {
   // ---------- NAV / APP STATE ----------
@@ -66,59 +68,77 @@ const BPMonitorApp = () => {
     monthly: { avg: { systolic: 0, diastolic: 0 }, count: 0 }
   });
 
-  // ---------- MODEL LOAD ----------
-  const handleModelUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    setIsModelLoading(true);
-    try {
-      if (file.name.endsWith('.json')) {
-        const modelData = JSON.parse(await file.text());
-        setLoadedModel({
-          type: 'tensorflow-js',
-          data: modelData,
-          predict: (ppgWindow, features) => predictWithTensorFlowJS(modelData, ppgWindow, features)
-        });
-        setModelInfo({
-          name: file.name,
-          type: 'TensorFlow.js',
-          uploadTime: new Date().toLocaleString('th-TH'),
-          architecture: 'Two-Branch Neural Network',
-          inputShape: '(80,) + (12,)',
-          features: ['PPG Waveform (80 samples)', 'Hand-crafted Features (12)'],
-          accuracy: modelData.accuracy || 'Unknown',
-          size: (file.size / 1024).toFixed(1) + ' KB'
-        });
-      } else if (file.name.endsWith('.h5')) {
-        alert('⚠️ ไฟล์ .h5 ต้องแปลงเป็น TensorFlow.js ก่อน (tensorflowjs_converter)');
-        setIsModelLoading(false);
-        return;
-      } else if (file.name.endsWith('.tflite')) {
-        const arrayBuffer = await file.arrayBuffer();
-        setLoadedModel({
-          type: 'tensorflow-lite',
-          data: arrayBuffer,
-          predict: (ppgWindow, features) => predictWithTensorFlowLite(arrayBuffer, ppgWindow, features)
-        });
-        setModelInfo({
-          name: file.name,
-          type: 'TensorFlow Lite',
-          uploadTime: new Date().toLocaleString('th-TH'),
-          architecture: 'Two-Branch Neural Network (Optimized)',
-          inputShape: '(80,) + (12,)',
-          features: ['PPG Waveform (80 samples)', 'Hand-crafted Features (12)'],
-          size: (file.size / 1024).toFixed(1) + ' KB'
-        });
-      } else {
-        throw new Error('รองรับเฉพาะ .json (TF.js), .h5 (Keras), .tflite (TFLite)');
-      }
-      alert('✅ โหลดโมเดล AI สำเร็จ!');
-    } catch (err) {
-      console.error(err);
-      alert('❌ โหลดโมเดลไม่สำเร็จ: ' + err.message);
+ // ---------- MODEL LOAD ----------
+const handleModelUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  setIsModelLoading(true);
+  try {
+    if (file.name.endsWith('.json')) {
+      // ✅ โหลดโมเดล TensorFlow.js (จริง)
+      const model = await tf.loadLayersModel(tf.io.browserFiles([file]));
+      setLoadedModel({
+        type: 'tensorflow-js',
+        model,
+        predict: async (ppgWindow, features) => {
+          const x1 = tf.tensor(ppgWindow, [1, 80]);
+          const x2 = tf.tensor(features, [1, 12]);
+          const y = model.predict([x1, x2]);
+          const out = Array.isArray(y) ? y[0] : y;
+          const preds = await out.data();
+          tf.dispose([x1, x2, y, out]);
+          return {
+            systolic: Math.round(preds[0]),
+            diastolic: Math.round(preds[1]),
+            confidence: 0.90,
+            model_type: 'TensorFlow.js'
+          };
+        }
+      });
+      setModelInfo({
+        name: file.name,
+        type: 'TensorFlow.js',
+        uploadTime: new Date().toLocaleString('th-TH'),
+        architecture: 'Two-Branch Neural Network',
+        inputShape: '(80,) + (12,)',
+        features: ['PPG Waveform (80 samples)', 'Hand-crafted Features (12)'],
+        size: (file.size / 1024).toFixed(1) + ' KB'
+      });
+
+    } else if (file.name.endsWith('.h5')) {
+      alert('⚠️ ไฟล์ .h5 ต้องแปลงเป็น TensorFlow.js ก่อน (ใช้ tensorflowjs_converter)');
+      setIsModelLoading(false);
+      return;
+
+    } else if (file.name.endsWith('.tflite')) {
+      // ✅ โหลดโมเดล TensorFlow Lite
+      const arrayBuffer = await file.arrayBuffer();
+      setLoadedModel({
+        type: 'tensorflow-lite',
+        data: arrayBuffer,
+        predict: (ppgWindow, features) => predictWithTensorFlowLite(arrayBuffer, ppgWindow, features)
+      });
+      setModelInfo({
+        name: file.name,
+        type: 'TensorFlow Lite',
+        uploadTime: new Date().toLocaleString('th-TH'),
+        architecture: 'Two-Branch Neural Network (Optimized)',
+        inputShape: '(80,) + (12,)',
+        features: ['PPG Waveform (80 samples)', 'Hand-crafted Features (12)'],
+        size: (file.size / 1024).toFixed(1) + ' KB'
+      });
+
+    } else {
+      throw new Error('⚠️ รองรับเฉพาะไฟล์ .json (TF.js), .h5 (Keras), .tflite (TFLite)');
     }
-    setIsModelLoading(false);
-  };
+
+    alert('✅ โหลดโมเดล AI สำเร็จ!');
+  } catch (err) {
+    console.error(err);
+    alert('❌ โหลดโมเดลไม่สำเร็จ: ' + err.message);
+  }
+  setIsModelLoading(false);
+};
 
   // ---------- FEATURE EXTRACT ----------
   const calculatePPGFeatures = (ppgDataArr) => {
@@ -497,6 +517,54 @@ const BPMonitorApp = () => {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // ---------- AUTO LOAD MODEL (STEP 4) ----------
+useEffect(() => {
+  const autoLoadModel = async () => {
+    try {
+      // ไฟล์ต้องอยู่ที่ public/tfjs_model/model.json
+      const model = await tf.loadLayersModel('/tfjs_model/model.json');
+
+      setLoadedModel({
+        type: 'tensorflow-js',
+        model,
+        // ตัว predict จริง ใช้ tfjs model ที่โหลดมา
+        predict: async (ppgWindow, features) => {
+          // shape: (1, 80) และ (1, 12) ตามที่ UI กำหนดไว้
+          const x1 = tf.tensor(ppgWindow, [1, 80]);
+          const x2 = tf.tensor(features, [1, 12]);
+          // ถ้าโมเดลเป็น two-branch จะต้องส่งเป็น array
+          const y = model.predict([x1, x2]);
+          const out = Array.isArray(y) ? y[0] : y;
+          const preds = await out.data();
+          tf.dispose([x1, x2, y, out]);
+          return {
+            systolic: Math.round(preds[0]),
+            diastolic: Math.round(preds[1]),
+            confidence: 0.92,
+            model_type: 'TensorFlow.js (Auto)'
+          };
+        }
+      });
+
+      setModelInfo({
+        name: 'Auto-loaded model (tfjs_model/model.json)',
+        type: 'TensorFlow.js',
+        uploadTime: new Date().toLocaleString('th-TH'),
+        architecture: 'Two-Branch Neural Network',
+        inputShape: '(80,) + (12,)',
+        features: ['PPG Waveform (80 samples)', 'Hand-crafted Features (12)'],
+        size: 'N/A'
+      });
+
+      console.log('✅ Auto-loaded TFJS model จาก /tfjs_model/model.json');
+    } catch (err) {
+      // ถ้าไม่พบไฟล์ /tfjs_model/model.json ก็เงียบไว้ ให้ผู้ใช้กดอัปโหลดเองได้
+      console.warn('⚠️ Auto-load model failed:', err.message);
+    }
+  };
+
+  autoLoadModel();
+}, []);
 
   // ---------- UI HELPERS ----------
   const getConnectionIcon = () => {

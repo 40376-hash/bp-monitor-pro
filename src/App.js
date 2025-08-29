@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 // import WiFiManagerPage from './components/WiFiManagerPage'; // ถ้ามีไฟล์นี้ค่อยเปิดบรรทัดนี้
+import * as tf from '@tensorflow/tfjs';
 
 const BPMonitorApp = () => {
   // ---------- NAV / APP STATE ----------

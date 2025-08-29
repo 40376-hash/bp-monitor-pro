@@ -3,7 +3,6 @@ import {
   Heart, Brain, Activity, CheckCircle, AlertCircle, BarChart3, Wifi, WifiOff,
   Upload, Settings, Bluetooth, Usb, Home, Link as LinkIcon, TrendingUp, Calendar, X
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 // import WiFiManagerPage from './components/WiFiManagerPage'; // ถ้ามีไฟล์นี้ค่อยเปิดบรรทัดนี้
 import {
   LineChart as ReLineChart,

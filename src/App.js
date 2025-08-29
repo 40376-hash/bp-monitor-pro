@@ -3,18 +3,19 @@ import {
   Heart, Brain, Activity, CheckCircle, AlertCircle, BarChart3, Wifi, WifiOff,
   Upload, Settings, Bluetooth, Usb, Home, Link as LinkIcon, TrendingUp, Calendar, X
 } from 'lucide-react';
-// import WiFiManagerPage from './components/WiFiManagerPage'; // ถ้ามีไฟล์นี้ค่อยเปิดบรรทัดนี้
+
+// recharts (ตั้งชื่อ alias ให้ครบ กันชนซ้ำ)
 import {
   LineChart as ReLineChart,
   Line as ReLine,
-  XAxis,
-  YAxis,
-  ResponsiveContainer,
-  Tooltip as ReTooltip
+  XAxis as ReXAxis,
+  YAxis as ReYAxis,
+  ResponsiveContainer as ReResponsiveContainer,
+  Tooltip as ReTooltip,
 } from 'recharts';
+
 import * as tf from '@tensorflow/tfjs';
 const MODEL_URL = '/tfjs_model/model.json'; // path ไปที่ public/tfjs_model/model.json
-
 const BPMonitorApp = () => {
   // ---------- NAV / APP STATE ----------
   const [currentPage, setCurrentPage] = useState('home');

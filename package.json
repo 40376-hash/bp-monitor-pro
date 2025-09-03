@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@tensorflow/tfjs": "^4.20.0",
+    "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-backend-webgl": "4.22.0",
-    "@tensorflow/tfjs-backend-cpu": "4.22.0"
+    "@tensorflow/tfjs-backend-cpu": "4.22.0",
     "zustand": "^4.5.2",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
@@ -13,8 +13,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "recharts": "^2.10.3",
-    "lucide-react": "^0.456.0",
+    "recharts": "^2.12.6",
+    "lucide-react": "^0.477.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
@@ -40,5 +40,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "engines": {
+    "node": "20.x"
   }
 }

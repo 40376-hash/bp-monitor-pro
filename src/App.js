@@ -23,6 +23,24 @@ import '@tensorflow/tfjs-backend-cpu';
 
 // ✅ path โมเดล (ต้องอยู่ใน public/tfjs_model/model.json)
 const MODEL_URL = '/tfjs_model/model.json';
+// --- Register Keras Lambda("slice12") as a custom TFJS layer ---
+class LambdaSlice12 extends tf.layers.Layer {
+  static className = 'Lambda';           // << สำคัญ: ให้ชื่อชั้นตรงกับ JSON ("Lambda")
+  constructor(config) { super(config || {}); }
+  computeOutputShape(inputShape) {
+    // input: [batch, 32] -> output: [batch, 12]
+    return [Array.isArray(inputShape) ? inputShape[0][0] : inputShape[0], 12];
+  }
+  call(inputs) {
+    return tf.tidy(() => {
+      const x = Array.isArray(inputs) ? inputs[0] : inputs;
+      // slice along last dim -> take first 12 features
+      // shape (B, 32) --> (B, 12)
+      return tf.slice(x, [0, 0], [-1, 12]);
+    });
+  }
+}
+tf.serialization.registerClass(LambdaSlice12);
 
 // ---------- APP START ----------
 const BPMonitorApp = () => {
@@ -625,7 +643,7 @@ const handleModelUpload = async (event) => {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-// ---------- AUTO LOAD MODEL (LayersModel) ----------
+// ---------- AUTO LOAD MODEL (LayersModel + custom Lambda) ----------
 useEffect(() => {
   const boot = async () => {
     try {
@@ -637,14 +655,13 @@ useEffect(() => {
       const url = (process.env.PUBLIC_URL || '') + '/tfjs_model/model.json';
       console.log('[TFJS] Loading LAYERS model from:', url);
 
-      const model = await tf.loadLayersModel(url);   // ← สำคัญ: ใช้ loadLayersModel เท่านั้น
+      const model = await tf.loadLayersModel(url); // ← สำคัญ: layers เท่านั้น
 
-      // ห่อ predict ให้เข้ากับอินพุตของคุณ
       setLoadedModel({
         type: 'tfjs-layers',
         model,
         predict: async (ppgWindow, features12) => {
-          // คัด features 6 ตัว: mean, std, p2p, rms, s1, s2
+          // เลือก 6 ฟีเจอร์: mean, std, p2p, rms, s1, s2
           const feat6 = features12 && features12.length >= 8
             ? [features12[0], features12[1], features12[4], features12[5], features12[6], features12[7]]
             : (features12 || []).slice(0, 6);

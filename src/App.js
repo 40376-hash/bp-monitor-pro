@@ -78,10 +78,16 @@ const BPMonitorApp = () => {
 // ---------- MODEL LOAD ----------
 const handleModelUpload = async (event) => {
   const files = Array.from(event.target.files || []);
-  if (!files.length) return;
+  console.log('Picked files:', files.map(f => f.name)); // Debug: ดูชื่อไฟล์ที่เลือก
+
+  if (!files.length) {
+    setIsModelLoading(false); // รีเซ็ต loading state
+    return;
+  }
 
   setIsModelLoading(true);
   try {
+    // ...
     // จัด model.json ให้อยู่หน้าสุดเสมอ (กันบาง backend งอแง)
     const jsonIdx = files.findIndex(f => f.name.toLowerCase().endsWith('model.json'));
     if (jsonIdx > 0) {
@@ -1074,12 +1080,17 @@ useEffect(() => {
 
         {!loadedModel ? (
           <div className="text-center py-8">
-            <input type="file" 
-          ref={modelFileRef} 
-  onChange={handleModelUpload} 
+<input
+  type="file"
+  ref={modelFileRef}
+  onChange={(e) => { 
+    handleModelUpload(e); 
+    e.target.value = ''; // รีเซ็ต input หลังเลือกไฟล์
+  }}
   multiple
-  accept=".json,.bin,.h5,.tflite" 
-  className="hidden" 
+  accept=".json,.bin,.h5,.tflite"
+  className="hidden"
+/>
 />
             <button onClick={() => modelFileRef.current?.click()} disabled={isModelLoading}
               className="flex items-center justify-center space-x-3 p-8 border-2 border-dashed border-purple-300 rounded-2xl hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50 mx-auto max-w-md">

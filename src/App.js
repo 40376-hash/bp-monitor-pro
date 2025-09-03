@@ -210,7 +210,6 @@ const handleModelUpload = async (event) => {
   }
   setIsModelLoading(false);
 };
-};
   // ---------- FEATURE EXTRACT ----------
   const calculatePPGFeatures = (ppgDataArr) => {
     if (!ppgDataArr || ppgDataArr.length < 80) return null;

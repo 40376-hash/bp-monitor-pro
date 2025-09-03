@@ -625,52 +625,66 @@ const handleModelUpload = async (event) => {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-// ---------- AUTO LOAD MODEL (GraphModel) ----------
+// ---------- AUTO LOAD MODEL (LayersModel) ----------
 useEffect(() => {
   const boot = async () => {
     try {
       await tf.ready();
       try { await tf.setBackend('webgl'); } catch {}
-      if (tf.getBackend() !== 'webgl') {
-        await tf.setBackend('cpu');
-      }
+      if (tf.getBackend() !== 'webgl') { try { await tf.setBackend('cpu'); } catch {} }
       console.log('[TFJS] backend:', tf.getBackend());
 
-      const url = process.env.PUBLIC_URL + '/tfjs_model/model.json';
-      console.log('[TFJS] Loading model from:', url);
+      const url = (process.env.PUBLIC_URL || '') + '/tfjs_model/model.json';
+      console.log('[TFJS] Loading LAYERS model from:', url);
 
-      // 👇 บังคับโหลดแบบ GraphModel
-      const model = await tf.loadGraphModel(url);
+      const model = await tf.loadLayersModel(url);   // ← สำคัญ: ใช้ loadLayersModel เท่านั้น
 
+      // ห่อ predict ให้เข้ากับอินพุตของคุณ
       setLoadedModel({
-        type: 'tfjs-graph',
+        type: 'tfjs-layers',
         model,
-        predict: async (ppgWindow, features) => {
-          const x1 = tf.tensor(ppgWindow, [1, 80, 1]); // 👈 ต้อง (1,80,1)
-          const x2 = tf.tensor(features, [1, 6]);      // 👈 ต้อง (1,6)
+        predict: async (ppgWindow, features12) => {
+          // คัด features 6 ตัว: mean, std, p2p, rms, s1, s2
+          const feat6 = features12 && features12.length >= 8
+            ? [features12[0], features12[1], features12[4], features12[5], features12[6], features12[7]]
+            : (features12 || []).slice(0, 6);
 
-          const y = await model.executeAsync({ Xw: x1, Xf: x2 });
+          const x1 = tf.tensor(ppgWindow, [1, 80, 1]); // Xw
+          const x2 = tf.tensor(feat6,     [1, 6]);     // Xf
+
+          const y = model.predict([x1, x2]);
           const out = Array.isArray(y) ? y[0] : y;
           const preds = await out.data();
 
           tf.dispose([x1, x2, y, out]);
 
           return {
-            systolic: Math.round(preds[0]),
+            systolic:  Math.round(preds[0]),
             diastolic: Math.round(preds[1]),
-            confidence: 0.9,
-            model_type: 'TFJS GraphModel'
+            confidence: 0.92,
+            model_type: 'TensorFlow.js (LayersModel)',
           };
         }
       });
 
-      console.log('✅ Auto-loaded TFJS GraphModel OK');
+      setModelInfo({
+        name: 'tfjs_model/model.json',
+        type: 'TensorFlow.js (LayersModel)',
+        uploadTime: new Date().toLocaleString('th-TH'),
+        architecture: 'Two-Branch Neural Network',
+        inputShape: '(80,1) + (6,)',
+        features: ['PPG Waveform (80×1)', 'Hand-crafted Features (6)'],
+        size: 'from public/',
+      });
+
+      console.log('✅ Loaded TFJS LayersModel OK');
     } catch (err) {
       console.error('❌ Auto-load model failed:', err);
-      alert('โหลดโมเดลไม่สำเร็จ: ' + (err.message || err));
+      setLoadedModel(null);
+      setModelInfo(null);
+      alert('โหลดโมเดลไม่สำเร็จ: ' + (err?.message || err));
     }
   };
-
   boot();
 }, []);
   // ---------- UI HELPERS ----------

@@ -4,6 +4,8 @@
   "private": true,
   "dependencies": {
     "@tensorflow/tfjs": "^4.20.0",
+    "@tensorflow/tfjs-backend-webgl": "4.22.0",
+    "@tensorflow/tfjs-backend-cpu": "4.22.0"
     "zustand": "^4.5.2",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",

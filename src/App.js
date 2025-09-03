@@ -625,86 +625,72 @@ const handleModelUpload = async (event) => {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // ---------- AUTO LOAD MODEL (STEP 4) ----------
-// ---------- AUTO LOAD MODEL (ฝังไฟล์ใน public) ----------
-// ---------- AUTO LOAD MODEL (STEP 4) ----------
+ // ---------- AUTO LOAD MODEL (LayersModel only) ----------
 useEffect(() => {
   const boot = async () => {
     try {
-      // 1) รอ TFJS พร้อม + ตั้ง backend
+      // 1) เตรียม TFJS + backend
       await tf.ready();
       try { await tf.setBackend('webgl'); } catch {}
       if (tf.getBackend() !== 'webgl') { try { await tf.setBackend('cpu'); } catch {} }
       console.log('[TFJS] backend:', tf.getBackend());
 
-      // 2) ชี้ URL ที่แน่ ๆ จากโฟลเดอร์ public
-      const url = process.env.PUBLIC_URL + '/tfjs_model/model.json';
-      console.log('[TFJS] Loading model from:', url);
+      // 2) ชี้ URL ไฟล์จาก public
+      const url = (process.env.PUBLIC_URL || '') + '/tfjs_model/model.json';
+      console.log('[TFJS] Loading LayersModel from:', url);
 
-      // 3) ลองโหลดเป็น LayersModel ก่อน ถ้าไม่สำเร็จค่อยลอง GraphModel
-      let model = null;
-      let loadedType = '';
+      // 3) โหลด "layers-model" เท่านั้น (ของคุณไม่ใช่ graph-model)
+      const model = await tf.loadLayersModel(url);
+      console.log('✅ Loaded TFJS LayersModel');
 
-      try {
-        model = await tf.loadLayersModel(url);
-        loadedType = 'TensorFlow.js (LayersModel)';
-        console.log('[TFJS] Loaded as LayersModel');
-      } catch (e1) {
-        console.warn('[TFJS] loadLayersModel failed:', e1?.message);
-        try {
-          model = await tf.loadGraphModel(url);
-          loadedType = 'TensorFlow.js (GraphModel)';
-          console.log('[TFJS] Loaded as GraphModel');
-        } catch (e2) {
-          throw new Error('Load TFJS model failed: ' + (e2?.message || e2));
-        }
-      }
-
-      // 4) เก็บโมเดล + predict จริง
+      // 4) ห่อ predict ให้ shape ตรงกับโมเดล: Xw=(1,80,1) และ Xf=(1,6)
       setLoadedModel({
-        type: loadedType.includes('Graph') ? 'tfjs-graph' : 'tfjs-layers',
+        type: 'tfjs-layers',
         model,
-        predict: async (ppgWindow, features) => {
-          // อินพุตตามสัญญา: (1,80) และ (1,12)
-          const x1 = tf.tensor(ppgWindow, [1, 80]);
-          const x2 = tf.tensor(features,  [1, 12]);
+        predict: async (ppgWindow, features12) => {
+          // features ของคุณคำนวณมา 12 ตัว -> คัดมา 6 ตัวให้เข้ากับ Xf=(6,)
+          // เลือกชุดที่สื่อความหมายดี: mean, std, p2p, rms, s1, s2
+          const feat6 = features12 && features12.length >= 8
+            ? [features12[0], features12[1], features12[4], features12[5], features12[6], features12[7]]
+            : (features12 || []).slice(0, 6);
 
-          // ถ้าเป็น GraphModel ที่รับหลายอินพุตแบบ array ก็ใช้แบบนี้ได้
+          // เข้าโมเดล: [Xw, Xf]
+          const x1 = tf.tensor(ppgWindow, [1, 80, 1]); // ต้องเป็น 3D
+          const x2 = tf.tensor(feat6,     [1, 6]);     // ต้องเป็น 2D
+
           const y = model.predict([x1, x2]);
           const out = Array.isArray(y) ? y[0] : y;
           const preds = await out.data();
+
           tf.dispose([x1, x2, y, out]);
 
           return {
             systolic:  Math.round(preds[0]),
             diastolic: Math.round(preds[1]),
             confidence: 0.92,
-            model_type: loadedType,
+            model_type: 'TensorFlow.js (LayersModel)',
           };
         }
       });
 
-      // 5) ใส่ข้อมูลหน้าการ์ด
+      // 5) ข้อมูลสำหรับ UI
       setModelInfo({
         name: 'tfjs_model/model.json',
-        type: loadedType,
+        type: 'TensorFlow.js (LayersModel)',
         uploadTime: new Date().toLocaleString('th-TH'),
         architecture: 'Two-Branch Neural Network',
-        inputShape: '(80,) + (12,)',
-        features: ['PPG Waveform (80 samples)', 'Hand-crafted Features (12)'],
+        inputShape: '(80,1) + (6,)',
+        features: ['PPG Waveform (80×1)', 'Hand-crafted Features (6)'],
         size: 'from public/',
       });
 
-      console.log('✅ Auto-loaded TFJS model OK');
     } catch (err) {
       console.error('❌ Auto-load model failed:', err);
-      // ไม่ใช้ demo fallback แล้ว — ให้เห็น error ตรง ๆ
       setLoadedModel(null);
       setModelInfo(null);
       alert('โหลดโมเดลไม่สำเร็จ: ' + (err?.message || err));
     }
   };
-
   boot();
 }, []);
   // ---------- UI HELPERS ----------

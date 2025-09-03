@@ -1,18 +1,4 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
-import {
-  Heart, Brain, Activity, CheckCircle, AlertCircle, BarChart3, Wifi, WifiOff,
-  Upload, Settings, Bluetooth, Usb, Home, Link as LinkIcon, TrendingUp, Calendar, X
-} from 'lucide-react';
 
-// rechart (ตั้งชื่อ alias ให้ครบ กันชนซ้ำ
-import {
-  LineChart as ReLineChart,
-  Line as ReLine,
-  XAxis as ReXAxis,
-  YAxis as ReYAxis,
-  ResponsiveContainer as ReResponsiveContainer,
-  Tooltip as ReTooltip,
-} from 'recharts';
 // ---------- IMPORTS ----------
 
 import React, { useState, useEffect, useRef, memo } from 'react';

@@ -634,76 +634,84 @@ const handleModelUpload = async (event) => {
   }, []);
   // ---------- AUTO LOAD MODEL (STEP 4) ----------
 // ---------- AUTO LOAD MODEL (ฝังไฟล์ใน public) ----------
+// ---------- AUTO LOAD MODEL (STEP 4) ----------
 useEffect(() => {
   const boot = async () => {
     try {
+      // 1) รอ TFJS พร้อม + ตั้ง backend
       await tf.ready();
       try { await tf.setBackend('webgl'); } catch {}
       if (tf.getBackend() !== 'webgl') { try { await tf.setBackend('cpu'); } catch {} }
-      console.log('TFJS backend:', tf.getBackend());
+      console.log('[TFJS] backend:', tf.getBackend());
 
-      // โหลดจาก public (เส้นทางนี้ชัวร์สุดตอน build/host)
+      // 2) ชี้ URL ที่แน่ ๆ จากโฟลเดอร์ public
       const url = process.env.PUBLIC_URL + '/tfjs_model/model.json';
-      console.log('Loading model from:', url);
-      const model = await tf.loadLayersModel(url);
+      console.log('[TFJS] Loading model from:', url);
 
+      // 3) ลองโหลดเป็น LayersModel ก่อน ถ้าไม่สำเร็จค่อยลอง GraphModel
+      let model = null;
+      let loadedType = '';
+
+      try {
+        model = await tf.loadLayersModel(url);
+        loadedType = 'TensorFlow.js (LayersModel)';
+        console.log('[TFJS] Loaded as LayersModel');
+      } catch (e1) {
+        console.warn('[TFJS] loadLayersModel failed:', e1?.message);
+        try {
+          model = await tf.loadGraphModel(url);
+          loadedType = 'TensorFlow.js (GraphModel)';
+          console.log('[TFJS] Loaded as GraphModel');
+        } catch (e2) {
+          throw new Error('Load TFJS model failed: ' + (e2?.message || e2));
+        }
+      }
+
+      // 4) เก็บโมเดล + predict จริง
       setLoadedModel({
-        type: 'tensorflow-js',
+        type: loadedType.includes('Graph') ? 'tfjs-graph' : 'tfjs-layers',
         model,
         predict: async (ppgWindow, features) => {
+          // อินพุตตามสัญญา: (1,80) และ (1,12)
           const x1 = tf.tensor(ppgWindow, [1, 80]);
-          const x2 = tf.tensor(features, [1, 12]);
-          const y  = model.predict([x1, x2]);
+          const x2 = tf.tensor(features,  [1, 12]);
+
+          // ถ้าเป็น GraphModel ที่รับหลายอินพุตแบบ array ก็ใช้แบบนี้ได้
+          const y = model.predict([x1, x2]);
           const out = Array.isArray(y) ? y[0] : y;
           const preds = await out.data();
           tf.dispose([x1, x2, y, out]);
+
           return {
-            systolic: Math.round(preds[0]),
+            systolic:  Math.round(preds[0]),
             diastolic: Math.round(preds[1]),
             confidence: 0.92,
-            model_type: 'TensorFlow.js (Auto)',
+            model_type: loadedType,
           };
         }
       });
 
+      // 5) ใส่ข้อมูลหน้าการ์ด
       setModelInfo({
         name: 'tfjs_model/model.json',
-        type: 'TensorFlow.js',
+        type: loadedType,
         uploadTime: new Date().toLocaleString('th-TH'),
         architecture: 'Two-Branch Neural Network',
         inputShape: '(80,) + (12,)',
         features: ['PPG Waveform (80 samples)', 'Hand-crafted Features (12)'],
-        size: 'N/A'
+        size: 'from public/',
       });
 
-      console.log('✅ Auto-loaded TFJS model จาก /tfjs_model/model.json');
+      console.log('✅ Auto-loaded TFJS model OK');
     } catch (err) {
       console.error('❌ Auto-load model failed:', err);
-      // (ทางลัด) ใส่ fallback demo เพื่อให้ปุ่มวิ่งได้แม้โมเดลโหลดไม่สำเร็จ
-      setLoadedModel({
-        type: 'demo-fallback',
-        predict: async (_ppgWindow, features) => {
-          const sys = 115 + (features?.[0] ?? 0) * 10;
-          const dia = 75  + (features?.[1] ?? 0) * 6;
-          return {
-            systolic: Math.max(90, Math.min(180, Math.round(sys))),
-            diastolic: Math.max(60, Math.min(120, Math.round(dia))),
-            confidence: 0.75,
-            model_type: 'Demo Fallback',
-          };
-        }
-      });
-      setModelInfo({
-        name: 'Demo Fallback',
-        type: 'Mock',
-        uploadTime: new Date().toLocaleString('th-TH'),
-        architecture: 'N/A',
-        inputShape: '(80,) + (12,)',
-        features: ['(demo)'],
-        size: 'N/A'
-      });
+      // ไม่ใช้ demo fallback แล้ว — ให้เห็น error ตรง ๆ
+      setLoadedModel(null);
+      setModelInfo(null);
+      alert('โหลดโมเดลไม่สำเร็จ: ' + (err?.message || err));
     }
   };
+
   boot();
 }, []);
   // ---------- UI HELPERS ----------

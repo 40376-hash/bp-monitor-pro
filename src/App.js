@@ -4,7 +4,7 @@ import {
   Upload, Settings, Bluetooth, Usb, Home, Link as LinkIcon, TrendingUp, Calendar, X
 } from 'lucide-react';
 
-// recharts (ตั้งชื่อ alias ให้ครบ กันชนซ้ำ
+// rechart (ตั้งชื่อ alias ให้ครบ กันชนซ้ำ
 import {
   LineChart as ReLineChart,
   Line as ReLine,

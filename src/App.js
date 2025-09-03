@@ -1361,6 +1361,109 @@ useEffect(() => {
     </div>
   </div>
 );
+const StatisticsPage = () => {
+  const chartData = bpHistory.slice(0, 20).reverse().map((bp) => ({
+    name: bp.timestamp.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }),
+    systolic: bp.systolic,
+    diastolic: bp.diastolic,
+    time: bp.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+  }));
+
+  const status = (bp) => getBPStatus(bp.systolic, bp.diastolic);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl p-6 border border-red-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-red-800">ทั้งหมด</h3>
+            <Heart className="h-6 w-6 text-red-600" />
+          </div>
+          <div className="text-2xl font-bold text-red-800">{bpHistory.length}</div>
+          <div className="text-sm text-red-600">ครั้งที่วัด</div>
+        </div>
+
+        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-blue-800">วันนี้</h3>
+            <Calendar className="h-6 w-6 text-blue-600" />
+          </div>
+          <div className="text-2xl font-bold text-blue-800">{bpStats.daily.count}</div>
+          <div className="text-sm text-blue-600">ครั้งที่วัด</div>
+        </div>
+
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-green-800">สัปดาห์นี้</h3>
+            <TrendingUp className="h-6 w-6 text-green-600" />
+          </div>
+          <div className="text-2xl font-bold text-green-800">{bpStats.weekly.count}</div>
+          <div className="text-sm text-green-600">ครั้งที่วัด</div>
+        </div>
+
+        <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-2xl p-6 border border-purple-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-purple-800">เดือนนี้</h3>
+            <BarChart3 className="h-6 w-6 text-purple-600" />
+          </div>
+          <div className="text-2xl font-bold text-purple-800">{bpStats.monthly.count}</div>
+          <div className="text-sm text-purple-600">ครั้งที่วัด</div>
+        </div>
+      </div>
+
+      {chartData.length > 0 ? (
+        <div className="bg-white rounded-2xl p-6 border border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 แนวโน้มความดันโลหิต</h3>
+          <div className="text-gray-500">พรุ่งนี้ค่อยเปิดกราฟ (ข้อมูล {chartData.length} จุดพร้อมแล้ว)</div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl p-6 border border-gray-200">
+          <div className="h-64 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <TrendingUp className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+              <div>📊 ยังไม่มีข้อมูลสถิติ</div>
+              <div className="text-sm mt-1">เชื่อมต่ออุปกรณ์และวัดความดันเพื่อดูกราฟ</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bpHistory.length > 0 && (
+        <div className="bg-white rounded-2xl p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">📋 การวัดล่าสุด</h3>
+          </div>
+          <div className="space-y-3">
+            {bpHistory.slice(0, 10).map((bp, i) => {
+              const s = status(bp);
+              return (
+                <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                  <div className="flex items-center space-x-4">
+                    <div className="text-lg font-bold text-gray-800">
+                      {bp.systolic}/{bp.diastolic}
+                    </div>
+                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${s.color} bg-white border`}>
+                      {s.status}
+                    </div>
+                    <div className="text-sm text-gray-500">HR: {bp.heartRate} BPM</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-800">
+                      {bp.timestamp.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {bp.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
   // ---------- RENDER ----------
   return (

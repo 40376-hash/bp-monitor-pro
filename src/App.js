@@ -77,6 +77,22 @@ const BPMonitorApp = () => {
     monthly: { avg: { systolic: 0, diastolic: 0 }, count: 0 }
   });
 
+  // ---------- TFJS BACKEND READY ----------
+useEffect(() => {
+  (async () => {
+    try {
+      await tf.ready();                          // รอให้ tf พร้อม
+      try { await tf.setBackend('webgl'); } catch {}
+      if (tf.getBackend() !== 'webgl') {
+        try { await tf.setBackend('cpu'); } catch {}
+      }
+      console.log('✅ TFJS backend:', tf.getBackend());
+    } catch (e) {
+      console.warn('⚠️ TFJS init failed:', e);
+    }
+  })();
+}, []);
+
   // ---------- CHECK TFJS BACKEND ----------
 useEffect(() => {
   (async () => {
@@ -98,7 +114,10 @@ useEffect(() => {
 // ---------- MODEL LOAD ----------
 const handleModelUpload = async (event) => {
   const files = Array.from(event.target.files || []);
-  console.log('Picked files:', files.map(f => f.name)); // Debug: ดูชื่อไฟล์ที่เลือก
+  setIsModelLoading(true);
+
+  // 👇👇 DEBUG: ดูว่าเลือกไฟล์อะไรเข้ามาบ้าง
+  console.log('[MODEL-UPLOAD] picked files:', files.map(f => f.name));
 
   if (!files.length) {
     setIsModelLoading(false); // รีเซ็ต loading state
@@ -1101,23 +1120,24 @@ useEffect(() => {
         {!loadedModel ? (
           <div className="text-center py-8">
 <input
-  type="file"
+ type="file"
   ref={modelFileRef}
-  onChange={(e) => { 
-    handleModelUpload(e); 
-    e.target.value = ''; // รีเซ็ต input หลังเลือกไฟล์
+  onChange={async (e) => {
+    await handleModelUpload(e);
+    // reset ค่า input เพื่อให้เลือกชุดไฟล์ใหม่ได้อีกครั้ง
+    if (e.target) e.target.value = '';
   }}
   multiple
   accept=".json,.bin,.h5,.tflite"
   className="hidden"
-/>
 />
             <button onClick={() => modelFileRef.current?.click()} disabled={isModelLoading}
               className="flex items-center justify-center space-x-3 p-8 border-2 border-dashed border-purple-300 rounded-2xl hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50 mx-auto max-w-md">
               <Upload className="h-10 w-10 text-purple-600" />
               <div className="text-center">
                 <div className="font-medium text-purple-800 text-lg">{isModelLoading ? '🔄 กำลังโหลดโมเดล...' : '📤 เลือกโมเดล AI'}</div>
-                <div className="text-sm text-purple-600 mt-1">รองรับ .json (TF.js), .h5 (Keras), .tflite</div>
+              <div className="text-sm text-purple-600 mt-1">
+                TF.js: เลือก <b>model.json + ทุกไฟล์ .bin</b> พร้อมกัน • หรือ .tflite เดี่ยว
               </div>
             </button>
           </div>

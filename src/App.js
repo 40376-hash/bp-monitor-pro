@@ -13,12 +13,36 @@ import {
   ResponsiveContainer as ReResponsiveContainer,
   Tooltip as ReTooltip,
 } from 'recharts';
+// ---------- IMPORTS ----------
+import React, { useState, useEffect, useRef, memo } from 'react';
+import {
+  Heart, Brain, Activity, CheckCircle, AlertCircle, BarChart3, Wifi, WifiOff,
+  Upload, Settings, Bluetooth, Usb, Home, Link as LinkIcon, TrendingUp, Calendar, X
+} from 'lucide-react';
 
+// recharts (ตั้ง alias กันชนซ้ำ)
+import {
+  LineChart as ReLineChart,
+  Line as ReLine,
+  XAxis as ReXAxis,
+  YAxis as ReYAxis,
+  ResponsiveContainer as ReResponsiveContainer,
+  Tooltip as ReTooltip,
+} from 'recharts';
+
+// ✅ TensorFlow.js
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgl';
 import '@tensorflow/tfjs-backend-cpu';
-const MODEL_URL = '/tfjs_model/model.json'; // path ไปที่ public/tfjs_model/model.json
+
+// ✅ path โมเดล (ต้องอยู่ใน public/tfjs_model/model.json)
+const MODEL_URL = '/tfjs_model/model.json';
+
+// ---------- APP START ----------
 const BPMonitorApp = () => {
+  // ---------- NAV / APP STATE ----------
+  const [currentPage, setCurrentPage] = useState('home');
+  // ... (state อื่น ๆ ของแอปตามเดิม)
   // ---------- NAV / APP STATE ----------
   const [currentPage, setCurrentPage] = useState('home');
 

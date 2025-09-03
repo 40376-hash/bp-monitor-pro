@@ -26,8 +26,7 @@ const MODEL_URL = '/tfjs_model/model.json';
 
 // ---------- APP START ----------
 const BPMonitorApp = () => {
-  // ---------- NAV / APP STATE ----------
-  const [currentPage, setCurrentPage] = useState('home');
+
   // ... (state อื่น ๆ ของแอปตามเดิม)
   // ---------- NAV / APP STATE ----------
   const [currentPage, setCurrentPage] = useState('home');

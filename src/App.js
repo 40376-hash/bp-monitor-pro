@@ -633,22 +633,27 @@ const handleModelUpload = async (event) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // ---------- AUTO LOAD MODEL (STEP 4) ----------
+// ---------- AUTO LOAD MODEL (ฝังไฟล์ใน public) ----------
 useEffect(() => {
-  const autoLoadModel = async () => {
+  const boot = async () => {
     try {
-      // ไฟล์ต้องอยู่ที่ public/tfjs_model/model.json
-      const model = await tf.loadLayersModel('/tfjs_model/model.json');
+      await tf.ready();
+      try { await tf.setBackend('webgl'); } catch {}
+      if (tf.getBackend() !== 'webgl') { try { await tf.setBackend('cpu'); } catch {} }
+      console.log('TFJS backend:', tf.getBackend());
+
+      // โหลดจาก public (เส้นทางนี้ชัวร์สุดตอน build/host)
+      const url = process.env.PUBLIC_URL + '/tfjs_model/model.json';
+      console.log('Loading model from:', url);
+      const model = await tf.loadLayersModel(url);
 
       setLoadedModel({
         type: 'tensorflow-js',
         model,
-        // ตัว predict จริง ใช้ tfjs model ที่โหลดมา
         predict: async (ppgWindow, features) => {
-          // shape: (1, 80) และ (1, 12) ตามที่ UI กำหนดไว้
           const x1 = tf.tensor(ppgWindow, [1, 80]);
           const x2 = tf.tensor(features, [1, 12]);
-          // ถ้าโมเดลเป็น two-branch จะต้องส่งเป็น array
-          const y = model.predict([x1, x2]);
+          const y  = model.predict([x1, x2]);
           const out = Array.isArray(y) ? y[0] : y;
           const preds = await out.data();
           tf.dispose([x1, x2, y, out]);
@@ -656,13 +661,13 @@ useEffect(() => {
             systolic: Math.round(preds[0]),
             diastolic: Math.round(preds[1]),
             confidence: 0.92,
-            model_type: 'TensorFlow.js (Auto)'
+            model_type: 'TensorFlow.js (Auto)',
           };
         }
       });
 
       setModelInfo({
-        name: 'Auto-loaded model (tfjs_model/model.json)',
+        name: 'tfjs_model/model.json',
         type: 'TensorFlow.js',
         uploadTime: new Date().toLocaleString('th-TH'),
         architecture: 'Two-Branch Neural Network',
@@ -673,14 +678,34 @@ useEffect(() => {
 
       console.log('✅ Auto-loaded TFJS model จาก /tfjs_model/model.json');
     } catch (err) {
-      // ถ้าไม่พบไฟล์ /tfjs_model/model.json ก็เงียบไว้ ให้ผู้ใช้กดอัปโหลดเองได้
-      console.warn('⚠️ Auto-load model failed:', err.message);
+      console.error('❌ Auto-load model failed:', err);
+      // (ทางลัด) ใส่ fallback demo เพื่อให้ปุ่มวิ่งได้แม้โมเดลโหลดไม่สำเร็จ
+      setLoadedModel({
+        type: 'demo-fallback',
+        predict: async (_ppgWindow, features) => {
+          const sys = 115 + (features?.[0] ?? 0) * 10;
+          const dia = 75  + (features?.[1] ?? 0) * 6;
+          return {
+            systolic: Math.max(90, Math.min(180, Math.round(sys))),
+            diastolic: Math.max(60, Math.min(120, Math.round(dia))),
+            confidence: 0.75,
+            model_type: 'Demo Fallback',
+          };
+        }
+      });
+      setModelInfo({
+        name: 'Demo Fallback',
+        type: 'Mock',
+        uploadTime: new Date().toLocaleString('th-TH'),
+        architecture: 'N/A',
+        inputShape: '(80,) + (12,)',
+        features: ['(demo)'],
+        size: 'N/A'
+      });
     }
   };
-
-  autoLoadModel();
+  boot();
 }, []);
-
   // ---------- UI HELPERS ----------
   const getConnectionIcon = () => {
     switch (connectionType) {

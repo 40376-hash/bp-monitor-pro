@@ -15,6 +15,8 @@ import {
 } from 'recharts';
 
 import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-backend-webgl';
+import '@tensorflow/tfjs-backend-cpu';
 const MODEL_URL = '/tfjs_model/model.json'; // path ไปที่ public/tfjs_model/model.json
 const BPMonitorApp = () => {
   // ---------- NAV / APP STATE ----------
@@ -74,6 +76,24 @@ const BPMonitorApp = () => {
     weekly: { avg: { systolic: 0, diastolic: 0 }, count: 0 },
     monthly: { avg: { systolic: 0, diastolic: 0 }, count: 0 }
   });
+
+  // ---------- CHECK TFJS BACKEND ----------
+useEffect(() => {
+  (async () => {
+    await tf.ready(); // ✅ รอให้ tf.js init เสร็จ
+    try { 
+      await tf.setBackend('webgl'); 
+    } catch {}
+    
+    if (tf.getBackend() !== 'webgl') {
+      try { 
+        await tf.setBackend('cpu'); 
+      } catch {}
+    }
+    
+    console.log('✅ TFJS backend พร้อมแล้ว:', tf.getBackend());
+  })();
+}, []);
 
 // ---------- MODEL LOAD ----------
 const handleModelUpload = async (event) => {

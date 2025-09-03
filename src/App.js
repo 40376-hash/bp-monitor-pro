@@ -1105,307 +1105,262 @@ useEffect(() => {
     </div>
   );
 
-  const AIAnalysisPage = () => (
-    <div className="space-y-6">
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-800 flex items-center space-x-2">
-              <Brain className="h-6 w-6 text-purple-600" /><span>🧠 AI Model Management</span>
-            </h2>
-            <p className="text-gray-600 mt-1">Two-Branch Neural Network สำหรับทำนายความดันโลหิต</p>
-          </div>
+ const AIAnalysisPage = () => (
+  <div className="space-y-6">
+    {/* กล่องจัดการโมเดล */}
+    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-800 flex items-center space-x-2">
+            <Brain className="h-6 w-6 text-purple-600" />
+            <span>🧠 AI Model Management</span>
+          </h2>
+          <p className="text-gray-600 mt-1">Two-Branch Neural Network สำหรับทำนายความดันโลหิต</p>
         </div>
+      </div>
 
-        {!loadedModel ? (
-          <div className="text-center py-8">
-<input
- type="file"
-  ref={modelFileRef}
-  onChange={async (e) => {
-    await handleModelUpload(e);
-    // reset ค่า input เพื่อให้เลือกชุดไฟล์ใหม่ได้อีกครั้ง
-    if (e.target) e.target.value = '';
-  }}
-  multiple
-  accept=".json,.bin,.h5,.tflite"
-  className="hidden"
-/>
-            <button onClick={() => modelFileRef.current?.click()} disabled={isModelLoading}
-              className="flex items-center justify-center space-x-3 p-8 border-2 border-dashed border-purple-300 rounded-2xl hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50 mx-auto max-w-md">
-              <Upload className="h-10 w-10 text-purple-600" />
-              <div className="text-center">
-                <div className="font-medium text-purple-800 text-lg">{isModelLoading ? '🔄 กำลังโหลดโมเดล...' : '📤 เลือกโมเดล AI'}</div>
+      {!loadedModel ? (
+        <div className="text-center py-8">
+          <input
+            type="file"
+            ref={modelFileRef}
+            onChange={async (e) => {
+              await handleModelUpload(e);
+              if (e.target) e.target.value = '';
+            }}
+            multiple
+            accept=".json,.bin,.h5,.tflite"
+            className="hidden"
+          />
+          <button
+            onClick={() => modelFileRef.current?.click()}
+            disabled={isModelLoading}
+            className="flex items-center justify-center space-x-3 p-8 border-2 border-dashed border-purple-300 rounded-2xl hover:border-purple-500 hover:bg-purple-50 transition-colors disabled:opacity-50 mx-auto max-w-md"
+          >
+            <Upload className="h-10 w-10 text-purple-600" />
+            <div className="text-center">
+              <div className="font-medium text-purple-800 text-lg">
+                {isModelLoading ? '🔄 กำลังโหลดโมเดล...' : '📤 เลือกโมเดล AI'}
+              </div>
               <div className="text-sm text-purple-600 mt-1">
-                TF.js: เลือก <b>model.json + ทุกไฟล์ .bin</b> พร้อมกัน • หรือ .tflite เดี่ยว
-              </div>
-            </button>
-          </div>
-        ) : (
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-6 rounded-xl border border-purple-200">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h3 className="font-medium text-purple-800 mb-4 flex items-center space-x-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" /><span>โมเดลพร้อมใช้งาน</span>
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div><div className="font-medium text-gray-700">📁 ไฟล์:</div><div className="text-purple-600">{modelInfo.name}</div></div>
-                  <div><div className="font-medium text-gray-700">🤖 ประเภท:</div><div className="text-purple-600">{modelInfo.type}</div></div>
-                  <div><div className="font-medium text-gray-700">🏗️ สถาปัตยกรรม:</div><div className="text-purple-600">{modelInfo.architecture}</div></div>
-                  <div><div className="font-medium text-gray-700">📊 Input Shape:</div><div className="text-purple-600">{modelInfo.inputShape}</div></div>
-                  {modelInfo.accuracy && <div><div className="font-medium text-gray-700">📈 ความแม่นยำ:</div><div className="text-purple-600">{modelInfo.accuracy}</div></div>}
-                  <div><div className="font-medium text-gray-700">📦 ขนาด:</div><div className="text-purple-600">{modelInfo.size}</div></div>
-                </div>
-                <div className="mt-4">
-                  <div className="font-medium text-gray-700 mb-2">🔧 Features:</div>
-                  <div className="flex flex-wrap gap-2">
-                    {modelInfo.features?.map((f, i) => (
-                      <span key={i} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">{f}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="mt-4 text-xs text-gray-500">โหลดเมื่อ: {modelInfo.uploadTime}</div>
-              </div>
-              <button onClick={() => { setLoadedModel(null); setModelInfo(null); setAiPredictions([]); }}
-                className="ml-4 p-2 text-red-500 hover:bg-red-50 rounded-lg" title="ลบโมเดล">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <h4 className="font-medium text-blue-800 mb-2">📋 ข้อกำหนดโมเดล:</h4>
-          <div className="text-sm text-blue-700 space-y-1">
-            <div><strong>🔹 Input 1:</strong> PPG Waveform (80 samples)</div>
-            <div><strong>🔹 Input 2:</strong> Hand-crafted Features (12)</div>
-            <div><strong>🔹 Output:</strong> [Systolic, Diastolic]</div>
-            <div><strong>🔹 Architecture:</strong> Two-Branch (เชื่อม LSTM/Conv + Features)</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl p-6 border border-gray-200">
-        <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center space-x-2">
-          <Activity className="h-6 w-6 text-green-600" /><span>🔬 Real-time AI Analysis</span>
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <h3 className="font-medium text-gray-800 mb-3">📊 Data Status</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span>🔗 Connection:</span><span className={isConnected?'text-green-600 font-medium':'text-red-500'}>{isConnected?'✅ Connected':'❌ Disconnected'}</span></div>
-                <div className="flex justify-between"><span>📡 PPG Samples:</span><span className={ppgData.length >= 80 ? 'text-green-600 font-medium':'text-orange-500'}>{ppgData.length}/80</span></div>
-                <div className="flex justify-between"><span>🎯 Signal Quality:</span><span className={signalQuality >= 70 ? 'text-green-600 font-medium':'text-orange-500'}>{signalQuality}%</span></div>
-                <div className="flex justify-between"><span>🧠 AI Model:</span><span className={loadedModel ? 'text-green-600 font-medium':'text-red-500'}>{loadedModel ? '✅ Ready' : '❌ Not loaded'}</span></div>
+                รองรับ .json (TF.js), .h5 (Keras), .tflite
               </div>
             </div>
-            <button onClick={performAIAnalysis} disabled={isAnalyzing || !loadedModel || !isConnected || ppgData.length < 80}
-              className={`w-full flex items-center justify-center space-x-3 px-6 py-4 rounded-xl font-medium transition-all ${
-                isAnalyzing || !loadedModel || !isConnected || ppgData.length < 80
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-              }`}>
-              {isAnalyzing ? (<><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div><span>🧠 กำลังวิเคราะห์...</span></>)
-                : (<><Brain className="h-5 w-5" /><span>🔬 วิเคราะห์ด้วย AI</span></>)}
-            </button>
-            {(!loadedModel || !isConnected || ppgData.length < 80) && (
-              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                <div className="flex items-start space-x-2 text-yellow-700">
-                  <AlertCircle className="h-5 w-5 mt-0.5" />
-                  <div className="text-sm">
-                    <div className="font-medium mb-1">⚠️ Requirements:</div>
-                    <ul className="space-y-1">
-                      {!loadedModel && <li>• โหลดโมเดล AI</li>}
-                      {!isConnected && <li>• เชื่อมต่อ ESP32</li>}
-                      {ppgData.length < 80 && <li>• รอข้อมูล PPG (ต้องการ 80 จุด)</li>}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <h3 className="font-medium text-gray-800 mb-3">🧮 Extracted Features</h3>
-              {ppgData.length >= 80 ? (
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {(() => {
-                    const f = calculatePPGFeatures(ppgData);
-                    const names = ['Mean','Std','Skew','Kurt','P2P','RMS','S1','S2','Centroid','Bandwidth','P_LF','P_HF'];
-                    return f.map((v, i) => (
-                      <div key={i} className="flex justify-between p-2 bg-white rounded border">
-                        <span className="font-medium text-gray-600">{names[i]}:</span>
-                        <span className="text-purple-600">{Number.isFinite(v) ? v.toFixed(3) : '-'}</span>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              ) : <div className="text-gray-500 text-center py-4">รอข้อมูล PPG เพิ่มเติม...</div>}
-            </div>
-          </div>
-        </div>
-
-        {aiPredictions.length > 0 && (
-          <div className="bg-white rounded-2xl p-6 border border-gray-200 mt-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center space-x-2">
-              <BarChart3 className="h-6 w-6 text-blue-600" /><span>📈 AI Prediction History</span>
-            </h2>
-            <div className="space-y-3">
-              {aiPredictions.slice(0, 10).map((p, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 hover:shadow-md transition-shadow">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-lg font-bold text-gray-800">{p.systolic}/{p.diastolic}<span className="text-sm text-gray-500 ml-1">mmHg</span></div>
-                    <div className="flex items-center space-x-2">
-                      <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">🧠 {p.model_type}</div>
-                      <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">🎯 {(p.confidence * 100).toFixed(1)}%</div>
-                    </div>
-                  </div>
-                  <div className="text-right text-sm text-gray-600">
-                    <div>{p.timestamp.toLocaleDateString('th-TH')}</div>
-                    <div>{p.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
- const StatisticsPage = () => {
-  const chartData = bpHistory.slice(0, 20).reverse().map((bp) => ({
-    name: bp.timestamp.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' }),
-    systolic: bp.systolic,
-    diastolic: bp.diastolic,
-    time: bp.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
-  }));
-
-  const status = (bp) => getBPStatus(bp.systolic, bp.diastolic);
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-r from-red-50 to-pink-50 rounded-2xl p-6 border border-red-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-red-800">ทั้งหมด</h3>
-            <Heart className="h-6 w-6 text-red-600" />
-          </div>
-          <div className="text-2xl font-bold text-red-800">{bpHistory.length}</div>
-          <div className="text-sm text-red-600">ครั้งที่วัด</div>
-        </div>
-
-        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl p-6 border border-blue-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-blue-800">วันนี้</h3>
-            <Calendar className="h-6 w-6 text-blue-600" />
-          </div>
-          <div className="text-2xl font-bold text-blue-800">{bpStats.daily.count}</div>
-          <div className="text-sm text-blue-600">ครั้งที่วัด</div>
-        </div>
-
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-6 border border-green-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-green-800">สัปดาห์นี้</h3>
-            <TrendingUp className="h-6 w-6 text-green-600" />
-          </div>
-          <div className="text-2xl font-bold text-green-800">{bpStats.weekly.count}</div>
-          <div className="text-sm text-green-600">ครั้งที่วัด</div>
-        </div>
-
-        <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-2xl p-6 border border-purple-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-purple-800">เดือนนี้</h3>
-            <BarChart3 className="h-6 w-6 text-purple-600" />
-          </div>
-          <div className="text-2xl font-bold text-purple-800">{bpStats.monthly.count}</div>
-          <div className="text-sm text-purple-600">ครั้งที่วัด</div>
-        </div>
-      </div>
-
-      {chartData.length > 0 ? (
-        <div className="bg-white rounded-2xl p-6 border border-gray-200">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 แนวโน้มความดันโลหิต</h3>
-          <div className="h-64">
-            <ReResponsiveContainer width="100%" height="100%">
-              <ReLineChart data={chartData}>
-                <ReXAxis dataKey="name" />
-                <ReYAxis domain={[60, 180]} />
-                <ReTooltip
-                  formatter={(v, n) => [v, n === 'systolic' ? 'Systolic' : 'Diastolic']}
-                  labelFormatter={(l) => `วันที่: ${l}`}
-                />
-                <ReLine
-                  type="monotone"
-                  dataKey="systolic"
-                  stroke="#ef4444"
-                  strokeWidth={3}
-                  dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
-                />
-                <ReLine
-                  type="monotone"
-                  dataKey="diastolic"
-                  stroke="#3b82f6"
-                  strokeWidth={3}
-                  dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
-                />
-              </ReLineChart>
-            </ReResponsiveContainer>
-          </div>
+          </button>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl p-6 border border-gray-200">
-          <div className="h-64 flex items-center justify-center text-gray-500">
-            <div className="text-center">
-              <TrendingUp className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-              <div>📊 ยังไม่มีข้อมูลสถิติ</div>
-              <div className="text-sm mt-1">เชื่อมต่ออุปกรณ์และวัดความดันเพื่อดูกราฟ</div>
+        <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-6 rounded-xl border border-purple-200">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="font-medium text-purple-800 mb-4 flex items-center space-x-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span>โมเดลพร้อมใช้งาน</span>
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="font-medium text-gray-700">📁 ไฟล์:</div>
+                  <div className="text-purple-600">{modelInfo.name}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-700">🤖 ประเภท:</div>
+                  <div className="text-purple-600">{modelInfo.type}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-700">🏗️ สถาปัตยกรรม:</div>
+                  <div className="text-purple-600">{modelInfo.architecture}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-gray-700">📊 Input Shape:</div>
+                  <div className="text-purple-600">{modelInfo.inputShape}</div>
+                </div>
+                {modelInfo.accuracy && (
+                  <div>
+                    <div className="font-medium text-gray-700">📈 ความแม่นยำ:</div>
+                    <div className="text-purple-600">{modelInfo.accuracy}</div>
+                  </div>
+                )}
+                <div>
+                  <div className="font-medium text-gray-700">📦 ขนาด:</div>
+                  <div className="text-purple-600">{modelInfo.size}</div>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <div className="font-medium text-gray-700 mb-2">🔧 Features:</div>
+                <div className="flex flex-wrap gap-2">
+                  {(modelInfo.features || []).map((f, i) => (
+                    <span key={i} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 text-xs text-gray-500">โหลดเมื่อ: {modelInfo.uploadTime}</div>
             </div>
+
+            <button
+              onClick={() => {
+                setLoadedModel(null);
+                setModelInfo(null);
+                setAiPredictions([]);
+              }}
+              className="ml-4 p-2 text-red-500 hover:bg-red-50 rounded-lg"
+              title="ลบโมเดล"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </div>
       )}
 
-      {bpHistory.length > 0 && (
-        <div className="bg-white rounded-2xl p-6 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-800">📋 การวัดล่าสุด</h3>
+      <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+        <h4 className="font-medium text-blue-800 mb-2">📋 ข้อกำหนดโมเดล:</h4>
+        <div className="text-sm text-blue-700 space-y-1">
+          <div><strong>🔹 Input 1:</strong> PPG Waveform (80 samples)</div>
+          <div><strong>🔹 Input 2:</strong> Hand-crafted Features (12)</div>
+          <div><strong>🔹 Output:</strong> [Systolic, Diastolic]</div>
+          <div><strong>🔹 Architecture:</strong> Two-Branch (เชื่อม LSTM/Conv + Features)</div>
+        </div>
+      </div>
+    </div>
+
+    {/* กล่องวิเคราะห์ */}
+    <div className="bg-white rounded-2xl p-6 border border-gray-200">
+      <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center space-x-2">
+        <Activity className="h-6 w-6 text-green-600" />
+        <span>🔬 Real-time AI Analysis</span>
+      </h2>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <h3 className="font-medium text-gray-800 mb-3">📊 Data Status</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>🔗 Connection:</span>
+                <span className={isConnected ? 'text-green-600 font-medium' : 'text-red-500'}>
+                  {isConnected ? '✅ Connected' : '❌ Disconnected'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>📡 PPG Samples:</span>
+                <span className={ppgData.length >= 80 ? 'text-green-600 font-medium' : 'text-orange-500'}>
+                  {ppgData.length}/80
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>🎯 Signal Quality:</span>
+                <span className={signalQuality >= 70 ? 'text-green-600 font-medium' : 'text-orange-500'}>
+                  {signalQuality}%
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>🧠 AI Model:</span>
+                <span className={loadedModel ? 'text-green-600 font-medium' : 'text-red-500'}>
+                  {loadedModel ? '✅ Ready' : '❌ Not loaded'}
+                </span>
+              </div>
+            </div>
           </div>
+
+          <button
+            onClick={performAIAnalysis}
+            disabled={isAnalyzing || !loadedModel || !isConnected || ppgData.length < 80}
+            className={`w-full flex items-center justify-center space-x-3 px-6 py-4 rounded-xl font-medium transition-all ${
+              isAnalyzing || !loadedModel || !isConnected || ppgData.length < 80
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+            }`}
+          >
+            {isAnalyzing ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>🧠 กำลังวิเคราะห์...</span>
+              </>
+            ) : (
+              <>
+                <Brain className="h-5 w-5" />
+                <span>🔬 วิเคราะห์ด้วย AI</span>
+              </>
+            )}
+          </button>
+
+          {(!loadedModel || !isConnected || ppgData.length < 80) && (
+            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
+              <div className="flex items-start space-x-2 text-yellow-700">
+                <AlertCircle className="h-5 w-5 mt-0.5" />
+                <div className="text-sm">
+                  <div className="font-medium mb-1">⚠️ Requirements:</div>
+                  <ul className="space-y-1">
+                    {!loadedModel && <li>• โหลดโมเดล AI</li>}
+                    {!isConnected && <li>• เชื่อมต่อ ESP32</li>}
+                    {ppgData.length < 80 && <li>• รอข้อมูล PPG (ต้องการ 80 จุด)</li>}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <div className="bg-gray-50 p-4 rounded-xl">
+            <h3 className="font-medium text-gray-800 mb-3">🧮 Extracted Features</h3>
+            {ppgData.length >= 80 ? (
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {(() => {
+                  const f = calculatePPGFeatures(ppgData);
+                  const names = ['Mean', 'Std', 'Skew', 'Kurt', 'P2P', 'RMS', 'S1', 'S2', 'Centroid', 'Bandwidth', 'P_LF', 'P_HF'];
+                  return f.map((v, i) => (
+                    <div key={i} className="flex justify-between p-2 bg-white rounded border">
+                      <span className="font-medium text-gray-600">{names[i]}:</span>
+                      <span className="text-purple-600">{Number.isFinite(v) ? v.toFixed(3) : '-'}</span>
+                    </div>
+                  ));
+                })()}
+              </div>
+            ) : (
+              <div className="text-gray-500 text-center py-4">รอข้อมูล PPG เพิ่มเติม...</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {aiPredictions.length > 0 && (
+        <div className="bg-white rounded-2xl p-6 border border-gray-200 mt-6">
+          <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center space-x-2">
+            <BarChart3 className="h-6 w-6 text-blue-600" />
+            <span>📈 AI Prediction History</span>
+          </h2>
           <div className="space-y-3">
-            {bpHistory.slice(0, 10).map((bp, i) => {
-              const s = status(bp);
-              return (
-                <div
-                  key={i}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="text-lg font-bold text-gray-800">
-                      {bp.systolic}/{bp.diastolic}
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-xs font-medium ${s.color} bg-white border`}>
-                      {s.status}
-                    </div>
-                    <div className="text-sm text-gray-500">HR: {bp.heartRate} BPM</div>
+            {aiPredictions.slice(0, 10).map((p, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="text-lg font-bold text-gray-800">
+                    {p.systolic}/{p.diastolic}
+                    <span className="text-sm text-gray-500 ml-1">mmHg</span>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium text-gray-800">
-                      {bp.timestamp.toLocaleDateString('th-TH', { month: 'short', day: 'numeric' })}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {bp.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <div className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">🧠 {p.model_type}</div>
+                    <div className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">🎯 {(p.confidence * 100).toFixed(1)}%</div>
                   </div>
                 </div>
-              );
-            })}
+                <div className="text-right text-sm text-gray-600">
+                  <div>{p.timestamp.toLocaleDateString('th-TH')}</div>
+                  <div>{p.timestamp.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
     </div>
-  );
-};
+  </div>
+);
 
   // ---------- RENDER ----------
   return (

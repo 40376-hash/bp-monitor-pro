@@ -14,11 +14,27 @@ import {
   Tooltip as ReTooltip,
 } from 'recharts';
 // ---------- IMPORTS ----------
+// ---------- IMPORTS ----------
 import React, { useState, useEffect, useRef, memo } from 'react';
 import {
   Heart, Brain, Activity, CheckCircle, AlertCircle, BarChart3, Wifi, WifiOff,
   Upload, Settings, Bluetooth, Usb, Home, Link as LinkIcon, TrendingUp, Calendar, X
 } from 'lucide-react';
+
+import {
+  LineChart as ReLineChart,
+  Line as ReLine,
+  XAxis as ReXAxis,
+  YAxis as ReYAxis,
+  ResponsiveContainer as ReResponsiveContainer,
+  Tooltip as ReTooltip,
+} from 'recharts';
+
+import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-backend-webgl';
+import '@tensorflow/tfjs-backend-cpu';
+
+const MODEL_URL = '/tfjs_model/model.json';
 
 // recharts (ตั้ง alias กันชนซ้ำ)
 import {

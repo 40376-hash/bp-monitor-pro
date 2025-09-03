@@ -16,22 +16,6 @@ import {
   Tooltip as ReTooltip,
 } from 'recharts';
 
-import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-backend-webgl';
-import '@tensorflow/tfjs-backend-cpu';
-
-const MODEL_URL = '/tfjs_model/model.json';
-
-// recharts (ตั้ง alias กันชนซ้ำ)
-import {
-  LineChart as ReLineChart,
-  Line as ReLine,
-  XAxis as ReXAxis,
-  YAxis as ReYAxis,
-  ResponsiveContainer as ReResponsiveContainer,
-  Tooltip as ReTooltip,
-} from 'recharts';
-
 // ✅ TensorFlow.js
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgl';

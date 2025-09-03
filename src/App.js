@@ -93,23 +93,7 @@ useEffect(() => {
   })();
 }, []);
 
-  // ---------- CHECK TFJS BACKEND ----------
-useEffect(() => {
-  (async () => {
-    await tf.ready(); // ✅ รอให้ tf.js init เสร็จ
-    try { 
-      await tf.setBackend('webgl'); 
-    } catch {}
-    
-    if (tf.getBackend() !== 'webgl') {
-      try { 
-        await tf.setBackend('cpu'); 
-      } catch {}
-    }
-    
-    console.log('✅ TFJS backend พร้อมแล้ว:', tf.getBackend());
-  })();
-}, []);
+
 
 // ---------- MODEL LOAD ----------
 const handleModelUpload = async (event) => {

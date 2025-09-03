@@ -643,8 +643,51 @@ const handleModelUpload = async (event) => {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-// ---------- AUTO LOAD MODEL (LayersModel, Xw=(80,1) + Xf=(6,)) ----------
+// ---------- AUTO LOAD MODEL (patch Keras3 -> TFJS) ----------
 useEffect(() => {
+  const loadPatchedLayersModel = async (baseUrl) => {
+    // 1) ดึง model.json
+    const meta = await fetch(baseUrl + '/model.json').then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status} on model.json`);
+      return r.json();
+    });
+
+    // 2) แพตช์: batch_shape -> batch_input_shape ในทุก InputLayer
+    const topo = meta.modelTopology || meta; // บาง converter ใส่ตรง ๆ
+    const mc = topo?.model_config?.config;
+    if (!mc?.layers) throw new Error('Invalid modelTopology: missing layers');
+
+    for (const lyr of mc.layers) {
+      if (lyr.class_name === 'InputLayer' && lyr.config) {
+        if (lyr.config.batch_shape && !lyr.config.batch_input_shape) {
+          lyr.config.batch_input_shape = lyr.config.batch_shape; // 👈 แก้จุดนี้
+        }
+      }
+    }
+
+    // 3) โหลด weights
+    const man = meta.weightsManifest?.[0];
+    if (!man) throw new Error('Invalid weightsManifest');
+    const binPath = man.paths?.[0];
+    if (!binPath) throw new Error('No weight bin path');
+    const weightData = await fetch(baseUrl + '/' + binPath).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status} on ${binPath}`);
+      return r.arrayBuffer();
+    });
+
+    // 4) ทำ IOHandler แบบ in-memory ให้ tfjs
+    const handler = {
+      load: async () => ({
+        modelTopology: topo,
+        weightSpecs: man.weights,
+        weightData
+      })
+    };
+
+    // 5) โหลดเป็น LayersModel
+    return tf.loadLayersModel(handler);
+  };
+
   const boot = async () => {
     try {
       await tf.ready();
@@ -652,36 +695,34 @@ useEffect(() => {
       if (tf.getBackend() !== 'webgl') { try { await tf.setBackend('cpu'); } catch {} }
       console.log('[TFJS] backend:', tf.getBackend());
 
-      const url = (process.env.PUBLIC_URL || '') + '/tfjs_model/model.json';
-      console.log('[TFJS] Loading LayersModel from:', url);
+      const baseUrl = (process.env.PUBLIC_URL || '') + '/tfjs_model';
+      console.log('[TFJS] Loading (patched) from:', baseUrl);
 
-      // ✅ โมเดลของคุณเป็น "layers-model"
-      const model = await tf.loadLayersModel(url);
-      console.log('✅ Loaded TFJS LayersModel');
+      const model = await loadPatchedLayersModel(baseUrl);
+      console.log('✅ Loaded TFJS LayersModel (patched)');
 
       setLoadedModel({
         type: 'tfjs-layers',
         model,
         predict: async (ppgWindow, features12) => {
-          // เลือก features 6 ตัวให้เข้ากับ Xf=(6,)
+          // ต้องเข้า (1,80,1) และ (1,6)
           const feat6 = features12 && features12.length >= 8
             ? [features12[0], features12[1], features12[4], features12[5], features12[6], features12[7]]
             : (features12 || []).slice(0, 6);
 
-          const x1 = tf.tensor(ppgWindow, [1, 80, 1]); // Xw: (1,80,1)
-          const x2 = tf.tensor(feat6,     [1, 6]);     // Xf: (1,6)
+          const x1 = tf.tensor(ppgWindow, [1, 80, 1]);
+          const x2 = tf.tensor(feat6,     [1, 6]);
 
           const y = model.predict([x1, x2]);
           const out = Array.isArray(y) ? y[0] : y;
           const preds = await out.data();
 
           tf.dispose([x1, x2, y, out]);
-
           return {
             systolic:  Math.round(preds[0]),
             diastolic: Math.round(preds[1]),
             confidence: 0.92,
-            model_type: 'TFJS LayersModel',
+            model_type: 'TFJS LayersModel (patched)',
           };
         }
       });
@@ -693,7 +734,7 @@ useEffect(() => {
         architecture: 'Two-Branch Neural Network',
         inputShape: '(80,1) + (6,)',
         features: ['PPG Waveform (80×1)', 'Hand-crafted Features (6)'],
-        size: 'from public/'
+        size: 'from public/ (patched in-memory)'
       });
 
     } catch (err) {
@@ -703,6 +744,7 @@ useEffect(() => {
       alert('โหลดโมเดลไม่สำเร็จ: ' + (err?.message || err));
     }
   };
+
   boot();
 }, []);
   // ---------- UI HELPERS ----------

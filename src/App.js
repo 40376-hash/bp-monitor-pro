@@ -643,7 +643,7 @@ const handleModelUpload = async (event) => {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-// ---------- AUTO LOAD MODEL (LayersModel + custom Lambda) ----------
+// ---------- AUTO LOAD MODEL (LayersModel, Xw=(80,1) + Xf=(6,)) ----------
 useEffect(() => {
   const boot = async () => {
     try {
@@ -653,21 +653,23 @@ useEffect(() => {
       console.log('[TFJS] backend:', tf.getBackend());
 
       const url = (process.env.PUBLIC_URL || '') + '/tfjs_model/model.json';
-      console.log('[TFJS] Loading LAYERS model from:', url);
+      console.log('[TFJS] Loading LayersModel from:', url);
 
-      const model = await tf.loadLayersModel(url); // ← สำคัญ: layers เท่านั้น
+      // ✅ โมเดลของคุณเป็น "layers-model"
+      const model = await tf.loadLayersModel(url);
+      console.log('✅ Loaded TFJS LayersModel');
 
       setLoadedModel({
         type: 'tfjs-layers',
         model,
         predict: async (ppgWindow, features12) => {
-          // เลือก 6 ฟีเจอร์: mean, std, p2p, rms, s1, s2
+          // เลือก features 6 ตัวให้เข้ากับ Xf=(6,)
           const feat6 = features12 && features12.length >= 8
             ? [features12[0], features12[1], features12[4], features12[5], features12[6], features12[7]]
             : (features12 || []).slice(0, 6);
 
-          const x1 = tf.tensor(ppgWindow, [1, 80, 1]); // Xw
-          const x2 = tf.tensor(feat6,     [1, 6]);     // Xf
+          const x1 = tf.tensor(ppgWindow, [1, 80, 1]); // Xw: (1,80,1)
+          const x2 = tf.tensor(feat6,     [1, 6]);     // Xf: (1,6)
 
           const y = model.predict([x1, x2]);
           const out = Array.isArray(y) ? y[0] : y;
@@ -679,7 +681,7 @@ useEffect(() => {
             systolic:  Math.round(preds[0]),
             diastolic: Math.round(preds[1]),
             confidence: 0.92,
-            model_type: 'TensorFlow.js (LayersModel)',
+            model_type: 'TFJS LayersModel',
           };
         }
       });
@@ -691,10 +693,9 @@ useEffect(() => {
         architecture: 'Two-Branch Neural Network',
         inputShape: '(80,1) + (6,)',
         features: ['PPG Waveform (80×1)', 'Hand-crafted Features (6)'],
-        size: 'from public/',
+        size: 'from public/'
       });
 
-      console.log('✅ Loaded TFJS LayersModel OK');
     } catch (err) {
       console.error('❌ Auto-load model failed:', err);
       setLoadedModel(null);
